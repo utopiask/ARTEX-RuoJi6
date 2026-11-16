@@ -92,7 +92,7 @@ const emptyForm = {
   maxHourly: "0",
 };
 
-export function McpServerCard() {
+export function McpServerCard({ expandAdvanced = false }: { expandAdvanced?: boolean }) {
   const { t } = useLiveTranslation();
   const { locale } = useDateLocale();
   const [settings, setSettings] = useState<McpServerSettings | null>(null);
@@ -228,7 +228,7 @@ export function McpServerCard() {
   const limit = (n: number) => (n > 0 ? String(n) : t("settings.mcpServer.unlimited"));
 
   return (
-    <Card className="mb-4 break-inside-avoid md:mb-6">
+    <Card className="break-inside-avoid">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <PlugZapIcon className="size-4" />
@@ -264,43 +264,47 @@ export function McpServerCard() {
             ) : null}
           </Field>
 
-          <form onSubmit={saveAccess} className="flex flex-col gap-4">
-            <Field>
-              <FieldLabel htmlFor="mcp-server-allowlist">{t("settings.mcpServer.allowlist")}</FieldLabel>
-              <Textarea
-                id="mcp-server-allowlist"
-                rows={3}
-                className="font-mono text-xs"
-                value={allowedIps}
-                disabled={!settings || savingAccess}
-                placeholder={t("settings.mcpServer.allowlistPlaceholder")}
-                onChange={(e) => setAllowedIps(e.target.value)}
-              />
-              <FieldDescription>{t("settings.mcpServer.allowlistHelp")}</FieldDescription>
-              {settings?.client_ip ? (
-                <FieldDescription>{t("settings.mcpServer.clientIp", { ip: settings.client_ip })}</FieldDescription>
-              ) : null}
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="mcp-server-proxies">{t("settings.mcpServer.trustedProxies")}</FieldLabel>
-              <Textarea
-                id="mcp-server-proxies"
-                rows={2}
-                className="font-mono text-xs"
-                value={trustedProxies}
-                disabled={!settings || savingAccess}
-                placeholder={t("settings.mcpServer.trustedProxiesPlaceholder")}
-                onChange={(e) => setTrustedProxies(e.target.value)}
-              />
-              <FieldDescription>{t("settings.mcpServer.trustedProxiesHelp")}</FieldDescription>
-            </Field>
-            <div>
-              <Button type="submit" variant="outline" disabled={!settings || savingAccess}>
-                {savingAccess ? t("settings.saving") : t("settings.mcpServer.saveAllowlist")}
-              </Button>
+          <details open={expandAdvanced ? true : undefined} className="rounded-md border p-3">
+            <summary className="cursor-pointer text-sm font-medium">{t("settings.overview.mcpAccess")}</summary>
+            <div className="mt-3">
+              <form onSubmit={saveAccess} className="flex flex-col gap-4">
+                <Field>
+                  <FieldLabel htmlFor="mcp-server-allowlist">{t("settings.mcpServer.allowlist")}</FieldLabel>
+                  <Textarea
+                    id="mcp-server-allowlist"
+                    rows={3}
+                    className="font-mono text-xs"
+                    value={allowedIps}
+                    disabled={!settings || savingAccess}
+                    placeholder={t("settings.mcpServer.allowlistPlaceholder")}
+                    onChange={(e) => setAllowedIps(e.target.value)}
+                  />
+                  <FieldDescription>{t("settings.mcpServer.allowlistHelp")}</FieldDescription>
+                  {settings?.client_ip ? (
+                    <FieldDescription>{t("settings.mcpServer.clientIp", { ip: settings.client_ip })}</FieldDescription>
+                  ) : null}
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="mcp-server-proxies">{t("settings.mcpServer.trustedProxies")}</FieldLabel>
+                  <Textarea
+                    id="mcp-server-proxies"
+                    rows={2}
+                    className="font-mono text-xs"
+                    value={trustedProxies}
+                    disabled={!settings || savingAccess}
+                    placeholder={t("settings.mcpServer.trustedProxiesPlaceholder")}
+                    onChange={(e) => setTrustedProxies(e.target.value)}
+                  />
+                  <FieldDescription>{t("settings.mcpServer.trustedProxiesHelp")}</FieldDescription>
+                </Field>
+                <div>
+                  <Button type="submit" variant="outline" disabled={!settings || savingAccess}>
+                    {savingAccess ? t("settings.saving") : t("settings.mcpServer.saveAllowlist")}
+                  </Button>
+                </div>
+              </form>
             </div>
-          </form>
-
+          </details>
           {error ? (
             <div className="flex items-center gap-2">
               <p role="alert" className="text-destructive text-sm">
@@ -312,108 +316,120 @@ export function McpServerCard() {
             </div>
           ) : null}
 
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between gap-2">
-              <span className="font-medium text-sm">{t("settings.mcpServer.tokens")}</span>
-              <Button type="button" size="sm" disabled={!settings} onClick={openCreate}>
-                <PlusIcon />
-                {t("settings.mcpServer.newToken")}
-              </Button>
-            </div>
-            {tokens.length === 0 ? (
-              <p className="text-muted-foreground text-sm">{t("settings.mcpServer.noTokens")}</p>
-            ) : (
-              <ul className="flex flex-col divide-y rounded-lg border">
-                {tokens.map((token) => {
-                  const status = tokenStatus(token);
-                  return (
-                    <li key={token.id} className="flex flex-wrap items-start justify-between gap-3 p-3">
-                      <div className="flex min-w-0 flex-col gap-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="truncate font-medium text-sm">{token.name}</span>
-                          <Badge variant={status === "active" ? "secondary" : "destructive"}>
-                            {t(`settings.mcpServer.status.${status}`)}
-                          </Badge>
-                          <code className="text-muted-foreground text-xs">{token.token_prefix}…</code>
-                        </div>
-                        <div className="flex flex-wrap gap-1">
-                          {SCOPES.filter((scope) => token.scopes.includes(scope.value)).map((scope) => (
-                            <Badge key={scope.value} variant="outline">
-                              {t(`settings.mcpServer.scope.${scope.key}`)}
-                            </Badge>
-                          ))}
-                          <Badge variant="outline">
-                            {token.company_ids.length === 0
-                              ? t("settings.mcpServer.allCompanies")
-                              : t("settings.mcpServer.companyCount", { n: token.company_ids.length })}
-                          </Badge>
-                        </div>
-                        <p className="text-muted-foreground text-xs">
-                          {token.last_used_at
-                            ? t("settings.mcpServer.lastUsed", { time: formatTime(token.last_used_at, locale) })
-                            : t("settings.mcpServer.neverUsed")}
-                          {" · "}
-                          {token.expires_at
-                            ? t("settings.mcpServer.expires", { time: formatTime(token.expires_at, locale) })
-                            : t("settings.mcpServer.neverExpires")}
-                        </p>
-                        {token.scopes.includes("task:create") ? (
-                          <p className="text-muted-foreground text-xs">
-                            {t("settings.mcpServer.limits", {
-                              active: limit(token.max_active_tasks),
-                              hourly: limit(token.max_tasks_per_hour),
-                            })}
-                          </p>
-                        ) : null}
-                      </div>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setConfirm({ action: status === "active" ? "revoke" : "delete", token })}
-                      >
-                        {status === "active" ? t("settings.mcpServer.revoke") : t("settings.mcpServer.delete")}
+          <details open={expandAdvanced ? true : undefined} className="rounded-md border p-3">
+            <summary className="cursor-pointer text-sm font-medium">{t("settings.overview.mcpTokens")}</summary>
+            <div className="mt-3">
+              <details
+                open={expandAdvanced || audit.some((entry) => !entry.ok) ? true : undefined}
+                className="rounded-md border p-3"
+              >
+                <summary className="cursor-pointer text-sm font-medium">{t("settings.overview.mcpAudit")}</summary>
+                <div className="mt-3">
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-medium text-sm">{t("settings.mcpServer.tokens")}</span>
+                      <Button type="button" size="sm" disabled={!settings} onClick={openCreate}>
+                        <PlusIcon />
+                        {t("settings.mcpServer.newToken")}
                       </Button>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between gap-2">
-              <div>
-                <span className="font-medium text-sm">{t("settings.mcpServer.audit")}</span>
-                <p className="text-muted-foreground text-xs">{t("settings.mcpServer.auditHelp")}</p>
-              </div>
-              <Button type="button" variant="outline" size="sm" onClick={load}>
-                <RefreshCwIcon />
-                {t("settings.mcpServer.refresh")}
-              </Button>
-            </div>
-            {audit.length === 0 ? (
-              <p className="text-muted-foreground text-sm">{t("settings.mcpServer.noAudit")}</p>
-            ) : (
-              <ul className="flex max-h-80 flex-col divide-y overflow-y-auto rounded-lg border">
-                {audit.map((entry) => (
-                  <li key={entry.id} className="flex flex-col gap-1 p-3 text-xs">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge variant={entry.ok ? "secondary" : "destructive"}>
-                        {entry.ok ? t("settings.mcpServer.auditOk") : t("settings.mcpServer.auditFailed")}
-                      </Badge>
-                      <code className="font-medium">{entry.tool}</code>
-                      <span className="text-muted-foreground">{entry.token_name}</span>
-                      <span className="text-muted-foreground">{formatTime(entry.created_at, locale)}</span>
-                      <span className="text-muted-foreground">{entry.remote_addr}</span>
                     </div>
-                    <code className="break-all text-muted-foreground">{entry.args}</code>
-                    {entry.ok ? null : <span className="break-all text-destructive">{entry.result}</span>}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+                    {tokens.length === 0 ? (
+                      <p className="text-muted-foreground text-sm">{t("settings.mcpServer.noTokens")}</p>
+                    ) : (
+                      <ul className="flex flex-col divide-y rounded-lg border">
+                        {tokens.map((token) => {
+                          const status = tokenStatus(token);
+                          return (
+                            <li key={token.id} className="flex flex-wrap items-start justify-between gap-3 p-3">
+                              <div className="flex min-w-0 flex-col gap-1">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="truncate font-medium text-sm">{token.name}</span>
+                                  <Badge variant={status === "active" ? "secondary" : "destructive"}>
+                                    {t(`settings.mcpServer.status.${status}`)}
+                                  </Badge>
+                                  <code className="text-muted-foreground text-xs">{token.token_prefix}…</code>
+                                </div>
+                                <div className="flex flex-wrap gap-1">
+                                  {SCOPES.filter((scope) => token.scopes.includes(scope.value)).map((scope) => (
+                                    <Badge key={scope.value} variant="outline">
+                                      {t(`settings.mcpServer.scope.${scope.key}`)}
+                                    </Badge>
+                                  ))}
+                                  <Badge variant="outline">
+                                    {token.company_ids.length === 0
+                                      ? t("settings.mcpServer.allCompanies")
+                                      : t("settings.mcpServer.companyCount", { n: token.company_ids.length })}
+                                  </Badge>
+                                </div>
+                                <p className="text-muted-foreground text-xs">
+                                  {token.last_used_at
+                                    ? t("settings.mcpServer.lastUsed", { time: formatTime(token.last_used_at, locale) })
+                                    : t("settings.mcpServer.neverUsed")}
+                                  {" · "}
+                                  {token.expires_at
+                                    ? t("settings.mcpServer.expires", { time: formatTime(token.expires_at, locale) })
+                                    : t("settings.mcpServer.neverExpires")}
+                                </p>
+                                {token.scopes.includes("task:create") ? (
+                                  <p className="text-muted-foreground text-xs">
+                                    {t("settings.mcpServer.limits", {
+                                      active: limit(token.max_active_tasks),
+                                      hourly: limit(token.max_tasks_per_hour),
+                                    })}
+                                  </p>
+                                ) : null}
+                              </div>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setConfirm({ action: status === "active" ? "revoke" : "delete", token })}
+                              >
+                                {status === "active" ? t("settings.mcpServer.revoke") : t("settings.mcpServer.delete")}
+                              </Button>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              </details>
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <span className="font-medium text-sm">{t("settings.mcpServer.audit")}</span>
+                    <p className="text-muted-foreground text-xs">{t("settings.mcpServer.auditHelp")}</p>
+                  </div>
+                  <Button type="button" variant="outline" size="sm" onClick={load}>
+                    <RefreshCwIcon />
+                    {t("settings.mcpServer.refresh")}
+                  </Button>
+                </div>
+                {audit.length === 0 ? (
+                  <p className="text-muted-foreground text-sm">{t("settings.mcpServer.noAudit")}</p>
+                ) : (
+                  <ul className="flex max-h-80 flex-col divide-y overflow-y-auto rounded-lg border">
+                    {audit.map((entry) => (
+                      <li key={entry.id} className="flex flex-col gap-1 p-3 text-xs">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant={entry.ok ? "secondary" : "destructive"}>
+                            {entry.ok ? t("settings.mcpServer.auditOk") : t("settings.mcpServer.auditFailed")}
+                          </Badge>
+                          <code className="font-medium">{entry.tool}</code>
+                          <span className="text-muted-foreground">{entry.token_name}</span>
+                          <span className="text-muted-foreground">{formatTime(entry.created_at, locale)}</span>
+                          <span className="text-muted-foreground">{entry.remote_addr}</span>
+                        </div>
+                        <code className="break-all text-muted-foreground">{entry.args}</code>
+                        {entry.ok ? null : <span className="break-all text-destructive">{entry.result}</span>}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          </details>
         </FieldGroup>
       </CardContent>
 

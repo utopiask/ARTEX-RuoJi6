@@ -149,6 +149,7 @@ func (t *Traffic) ImportArchive(dir string) (int64, error) {
 	}
 	t.wmu.Lock()
 	defer t.wmu.Unlock()
+	defer t.invalidateStorage()
 	for _, hash := range snapshot.Blobs {
 		if !blobHashRe.MatchString(hash) {
 			return 0, fmt.Errorf("invalid archived traffic blob %q", hash)

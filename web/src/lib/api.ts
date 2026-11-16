@@ -14,6 +14,11 @@ import type {
   AgentTrigger,
   ArchiveBatchItem,
   Asset,
+  AssetExportRequest,
+  AssetImportBatchResponse,
+  AssetImportOptions,
+  AssetImportPreviewResponse,
+  AssetImportReceipt,
   AssetInterceptRule,
   AssetInterceptRuleInput,
   Audit,
@@ -115,12 +120,62 @@ import type {
   TrafficEvidenceRole,
   TrafficHost,
   TrafficResp,
+  TrafficStorage,
   UpdateCheck,
   UpdateSettings,
   UsageStats,
   WorkspaceFile,
   WorkspaceListing,
 } from "@/lib/types";
+
+/**
+ * Authenticated file download into a Blob (asset import/export files)。沿用
+ * workspaceDownload 的模式：带 JWT 拉取、按 Content-Disposition 命名、用完释放。
+ */
+async function downloadAssetFile(path: string, method: "GET" | "POST", body?: string): Promise<{ filename: string }> {
+  if (MOCK) {
+    const blob = new Blob(["（demo）资产导入导出示例文件。"], { type: "text/plain" });
+    const objUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = objUrl;
+    a.download = method === "GET" ? `artex-资产模板-demo.txt` : `artex-assets-demo.txt`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(objUrl), 1000);
+    return { filename: a.download };
+  }
+  const token = getToken();
+  const r = await apiFetch(`/api${path}`, {
+    method,
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(body ? { "Content-Type": "application/json" } : {}),
+    },
+    body,
+  });
+  if (!r.ok) {
+    let message = `下载失败: ${r.status}`;
+    try {
+      const payload = (await r.json()) as { error?: string };
+      if (payload?.error) message = payload.error;
+    } catch {
+      /* 非 JSON 错误体沿用状态码文案 */
+    }
+    throw new Error(message);
+  }
+  const contentDisposition = r.headers.get("Content-Disposition") ?? "";
+  const blob = await r.blob();
+  const objUrl = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = objUrl;
+  a.download = downloadFilename(contentDisposition, "artex-assets");
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(objUrl);
+  return { filename: a.download };
+}
 
 /**
  * Read a download name from Content-Disposition. RFC 5987's filename* is
@@ -140,7 +195,7 @@ export function downloadFilename(contentDisposition: string, fallback: string): 
   return (legacy?.[1] ?? legacy?.[2] ?? fallback).trim() || fallback;
 }
 
-function getToken(): string | null {
+export function getToken(): string | null {
   if (typeof window === "undefined") return null;
   return localStorage.getItem("artex_token");
 }
@@ -225,14 +280,23 @@ export class ApiError extends Error {
 export async function http<T>(path: string, init?: RequestInit): Promise<T> {
   if (MOCK) return mockHandle<T>(init?.method ?? "GET", path, init?.body ?? null);
   const token = getToken();
-  const r = await apiFetch(`/api${path}`, {
-    ...init,
-    headers: {
-      ...(init?.body ? { "Content-Type": "application/json" } : {}),
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(init?.headers as Record<string, string> | undefined),
-    },
-  });
+  const multipart = typeof FormData !== "undefined" && init?.body instanceof FormData;
+  const headers: Record<string, string> = {};
+  const supplied = init?.headers;
+  if (Array.isArray(supplied)) {
+    for (const [key, value] of supplied) headers[key] = value;
+  } else if (supplied && "forEach" in supplied && typeof supplied.forEach === "function") {
+    supplied.forEach((value: string, key: string) => {
+      headers[key] = value;
+    });
+  } else Object.assign(headers, supplied);
+  const hasHeader = (name: string) => Object.keys(headers).some((key) => key.toLowerCase() === name);
+  if (multipart) {
+    // The browser supplies the multipart boundary, even if a caller supplied a content type.
+    for (const key of Object.keys(headers)) if (key.toLowerCase() === "content-type") delete headers[key];
+  } else if (init?.body && !hasHeader("content-type")) headers["Content-Type"] = "application/json";
+  if (token && !hasHeader("authorization")) headers.Authorization = `Bearer ${token}`;
+  const r = await apiFetch(`/api${path}`, { ...init, headers });
   if (!r.ok) {
     const fallback = r.status === 401 ? "未授权" : `${init?.method ?? "GET"} ${path}: ${r.status}`;
     let message = fallback;
@@ -758,6 +822,36 @@ export const api = {
   taskIntentAssets: (taskId: string) =>
     get<{ assets: IntentAsset[] }>(`/tasks/${taskId}/intent-assets`).then((r) => arr(r.assets)),
 
+  // ---- 资产导入导出（asset transfer）----
+  assetImportTemplate: (format: "xlsx" | "csv") => downloadAssetFile(`/assets/import-template?format=${format}`, "GET"),
+  assetImportPreview: (input: { file?: File; text?: string; options: AssetImportOptions }) => {
+    if (MOCK) return mockHandle<AssetImportPreviewResponse>("POST", "/api/assets/imports/preview", null);
+    const fd = new FormData();
+    fd.append("options", JSON.stringify(input.options));
+    if (input.file) fd.append("file", input.file);
+    if (input.text) fd.append("text", input.text);
+    return http<AssetImportPreviewResponse>("/assets/imports/preview", { method: "POST", body: fd });
+  },
+  assetImportBatch: (id: number, params: { action?: string; offset?: number; limit?: number } = {}) => {
+    const q = new URLSearchParams();
+    if (params.action) q.set("action", params.action);
+    q.set("offset", String(params.offset ?? 0));
+    q.set("limit", String(params.limit ?? 100));
+    return get<AssetImportBatchResponse>(`/assets/imports/batch/${id}?${q.toString()}`);
+  },
+  assetImportCommit: (id: number, planHash: string, rows?: number[]) =>
+    post<{ receipt: AssetImportReceipt; already_committed?: boolean }>(`/assets/imports/batch/${id}/commit`, {
+      plan_hash: planHash,
+      ...(rows && rows.length > 0 ? { rows } : {}),
+    }),
+  assetImportErrorsURL: (id: number) => (MOCK ? null : `/api/assets/imports/batch/${id}/errors`),
+  assetImportProbe: (id: number) =>
+    post<{ queued: number; not_queued: number; skipped: number; note?: string }>(
+      `/assets/imports/batch/${id}/probe`,
+      {},
+    ),
+  assetExport: (req: AssetExportRequest) => downloadAssetFile("/assets/export", "POST", JSON.stringify(req)),
+
   // ---- companies (企业 + 资产范围；归属唯一来源) ----
   companies: () => get<Company[]>("/companies").then(arr),
   createCompany: (name: string, scope: CompanyScopeRule[]) =>
@@ -1103,6 +1197,7 @@ export const api = {
         (opts.sort ? `&sort=${encodeURIComponent(opts.sort)}` : "") +
         (opts.order ? `&order=${encodeURIComponent(opts.order)}` : ""),
     ),
+  trafficStorage: () => get<TrafficStorage>("/traffic/storage"),
   trafficExchange: (id: string) => get<TrafficDetail>(`/traffic/exchange?id=${encodeURIComponent(id)}`),
   trafficHosts: (taskId?: string) =>
     get<{ hosts: TrafficHost[] }>(`/traffic/hosts${taskId ? `?task_id=${encodeURIComponent(taskId)}` : ""}`),
@@ -1368,6 +1463,8 @@ export const api = {
     session_header_key?: string; // 非空=每次请求带该 HTTP 头，头值=当前会话 session id；""=不发送
     retry?: LLMRetryOverride; // 本配置的重试覆盖；各项留 0 = 跟随全局重试策略
   }) => post<{ id: number }>("/llm/profiles", p),
+  duplicateLLMProfile: (id: string) =>
+    post<{ id: number; name: string }>(`/llm/profiles/${encodeURIComponent(id)}/duplicate`, {}),
   deleteLLMProfile: (id: string) => del<{ deleted: number }>(`/llm/profiles/${id}`),
   activateLLMProfile: (id: string) => post<{ ok: boolean }>("/llm/profiles/active", { id: Number(id) }),
   // 轮询链的实际顺序 + 各配置的熔断状态。

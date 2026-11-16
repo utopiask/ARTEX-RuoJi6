@@ -4,6 +4,7 @@ import * as React from "react";
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
+  DownloadIcon,
   GlobeIcon,
   KeyRoundIcon,
   LayoutTemplateIcon,
@@ -13,10 +14,12 @@ import {
   PlusIcon,
   SmartphoneIcon,
   Trash2Icon,
+  UploadIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 
 import { AssetDslSearch } from "@/components/asset-dsl-search";
+import { AssetExportDialog, AssetImportDialog } from "@/components/asset-transfer";
 import { ScopeTextEditor } from "@/components/scope-text-editor";
 import {
   AlertDialog,
@@ -443,6 +446,11 @@ export function AssetsTab({ taskId }: { taskId: string }) {
     setRefreshKey((current) => current + 1);
   }, []);
 
+  // 资产导入导出（任务页入口：预设任务关联；导出仅当前任务直接关联资产）
+  const [importOpen, setImportOpen] = React.useState(false);
+  const [exportOpen, setExportOpen] = React.useState(false);
+  const taskIdNum = Number(taskId);
+
   const remove = async () => {
     if (!removeTarget) return;
     setRemoving(true);
@@ -485,6 +493,20 @@ export function AssetsTab({ taskId }: { taskId: string }) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
+      <AssetImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        onImported={refresh}
+        presetTaskId={taskIdNum}
+        presetTaskLabel={taskId}
+      />
+      <AssetExportDialog
+        open={exportOpen}
+        onOpenChange={setExportOpen}
+        selectedIds={[]}
+        filter={{ task_id: taskIdNum }}
+        taskLabel={taskId}
+      />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <h2 className="font-medium text-sm">{ui("screen.e3a1dbbaefc3d7")}</h2>
@@ -493,10 +515,20 @@ export function AssetsTab({ taskId }: { taskId: string }) {
             {totalAll} {ui("screen.a5670ed30b06da")}
           </p>
         </div>
-        <Button size="sm" onClick={() => setAddOpen(true)}>
-          <PlusIcon data-icon="inline-start" />
-          {ui("screen.c4f675a491e4b9")}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button size="sm" onClick={() => setAddOpen(true)}>
+            <PlusIcon data-icon="inline-start" />
+            {ui("screen.c4f675a491e4b9")}
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}>
+            <UploadIcon data-icon="inline-start" />
+            {ui("assetTransfer.import")}
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setExportOpen(true)}>
+            <DownloadIcon data-icon="inline-start" />
+            {ui("assetTransfer.export")}
+          </Button>
+        </div>
       </div>
 
       <Tabs

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math/big"
 	"net/http"
 	"os"
 	"path"
@@ -28,6 +29,7 @@ import (
 	"github.com/Autumn-27/artex/llmhttp"
 	"github.com/Autumn-27/norma/llm"
 	"github.com/Autumn-27/norma/skill"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // validSkillName checks the agentskills.io name constraints, widened so a skill can
@@ -1856,6 +1858,93 @@ func (s *Server) pgSaveProfile(w http.ResponseWriter, r *http.Request) {
 	// engine's provider has to be rebuilt either way.
 	s.reapplyActiveProfile()
 	writeJSON(w, 200, map[string]any{"id": id})
+}
+
+// pgDuplicateProfile copies configuration only. Keys stay server-side, and runtime
+// health, quota state, history and bindings remain attached to the original ID.
+func (s *Server) pgDuplicateProfile(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathInt(r, "id")
+	if !ok || id <= 0 {
+		writeErr(w, http.StatusBadRequest, "invalid profile id")
+		return
+	}
+	pg := s.pg(w)
+	if pg == nil {
+		return
+	}
+	source, err := pg.ProfileByID(id)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "could not duplicate LLM profile")
+		return
+	}
+	if source == nil {
+		writeErr(w, http.StatusNotFound, "LLM profile not found")
+		return
+	}
+	clone := *source
+	clone.ID, clone.IsDefault = 0, false
+	// Concurrent requests may choose the same available name. Refresh the names
+	// after that specific conflict; bound insert attempts even under contention.
+	for attempt := 0; attempt < 5; attempt++ {
+		all, err := pg.ListProfiles()
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, "could not duplicate LLM profile")
+			return
+		}
+		taken := make(map[string]bool, len(all))
+		for _, p := range all {
+			taken[p.Name] = true
+		}
+		clone.Name = nextProfileName(source.Name, taken)
+		newID, err := pg.SaveProfile(&clone)
+		if err == nil {
+			s.invalidateProfileAgents()
+			s.reapplyActiveProfile()
+			writeJSON(w, http.StatusOK, map[string]any{"id": newID, "name": clone.Name})
+			return
+		}
+		var pgErr *pgconn.PgError
+		if !errors.As(err, &pgErr) || pgErr.Code != "23505" ||
+			pgErr.TableName != "llm_profiles" || pgErr.ConstraintName != "llm_profiles_name_key" {
+			// Database diagnostics may include the key or other private values.
+			writeErr(w, http.StatusInternalServerError, "could not duplicate LLM profile")
+			return
+		}
+	}
+	writeErr(w, http.StatusConflict, "LLM profile name is busy; please retry")
+}
+
+// nextProfileName recognizes only a positive decimal suffix after a hyphen.
+// Arbitrary precision keeps even imported, oversized suffixes incrementable.
+func nextProfileName(base string, taken map[string]bool) string {
+	stem := strings.TrimSpace(base)
+	if stem == "" {
+		stem = "LLM"
+	}
+	n := big.NewInt(2)
+	if i := strings.LastIndexByte(stem, '-'); i > 0 {
+		tail := stem[i+1:]
+		digits := tail != ""
+		for _, c := range tail {
+			if c < '0' || c > '9' {
+				digits = false
+				break
+			}
+		}
+		if digits {
+			v, ok := new(big.Int).SetString(tail, 10)
+			if ok && v.Sign() > 0 && strings.TrimSpace(stem[:i]) != "" {
+				stem, n = strings.TrimSpace(stem[:i]), v.Add(v, big.NewInt(1))
+			}
+		}
+	}
+	for {
+		candidate := stem + "-" + n.String()
+		if !taken[candidate] {
+			return candidate
+		}
+		n.Add(n, big.NewInt(1))
+	}
 }
 
 // pgGetLLMRetryPolicy 返回全局重试策略(五层各自的次数+间隔)。未配置过 → 全零，

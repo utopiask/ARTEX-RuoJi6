@@ -9,7 +9,6 @@ import {
   KeyboardIcon,
   RadioTowerIcon,
   SearchIcon,
-  SettingsIcon,
   ShieldAlertIcon,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -23,7 +22,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { localizedError } from "@/i18n/errors";
-import { matchesSettingsQuery } from "@/i18n/settings-search";
 import { useLiveTranslation } from "@/i18n/use-live-translation";
 import { api } from "@/lib/api";
 import { CHAT_SEND_MODE_OPTIONS, type ChatSendMode, setChatSendMode, useChatSendMode } from "@/lib/chat-send-mode";
@@ -32,6 +30,7 @@ import type { EgressReport, LLMProfile, ProxyPoolEntry, Settings, WorkerPool } f
 import { useEgressIp } from "../../_components/egress-ip-banner";
 import { BasicAuthCard } from "./_components/basic-auth-card";
 import { McpServerCard } from "./_components/mcp-server-card";
+import { type SettingsGroupSpec, SettingsOverview } from "./_components/settings-overview";
 import { UpdateCard } from "./_components/update-card";
 
 export default function SystemSettingsPage() {
@@ -48,7 +47,6 @@ export default function SystemSettingsPage() {
   const [browserScreenshotTimestamp, setBrowserScreenshotTimestamp] = React.useState(false);
   const [opsecEnabled, setOpsecEnabled] = React.useState(false);
   const [settingQuery, setSettingQuery] = React.useState("");
-  const [activeCategory, setActiveCategory] = React.useState("system");
   const [agentTrafficBinding, setAgentTrafficBinding] = React.useState(false);
   const [webSearch, setWebSearch] = React.useState(false);
   const [backend, setBackend] = React.useState("ddgs");
@@ -325,33 +323,6 @@ export default function SystemSettingsPage() {
       })
       .finally(() => setSaving(false));
   };
-
-  const matchesSetting = (keywordKey: string) => {
-    return matchesSettingsQuery(i18n, keywordKey, settingQuery);
-  };
-
-  const isSettingVisible = (category: string, keywords: string) => {
-    const query = settingQuery.trim();
-    return query ? matchesSetting(keywords) : activeCategory === category;
-  };
-
-  const settingCategories = [
-    { id: "system", label: t("settings.category.system"), hint: t("settings.category.systemHint"), icon: SettingsIcon },
-    {
-      id: "traffic",
-      label: t("settings.category.traffic"),
-      hint: t("settings.category.trafficHint"),
-      icon: RadioTowerIcon,
-    },
-    { id: "agent", label: t("settings.category.agent"), hint: t("settings.category.agentHint"), icon: CpuIcon },
-    {
-      id: "network",
-      label: t("settings.category.network"),
-      hint: t("settings.category.networkHint"),
-      icon: SearchIcon,
-    },
-    { id: "chat", label: t("settings.category.chat"), hint: t("settings.category.chatHint"), icon: KeyboardIcon },
-  ] as const;
 
   const toggleInjectPlanner = (v: boolean) => {
     setInjectPlanner(v); // optimistic
@@ -688,90 +659,19 @@ export default function SystemSettingsPage() {
       setSavingCredentials(false);
     }
   };
-  return (
-    <div className="flex flex-1 flex-col gap-4 md:gap-6">
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight">{t("settings.title")}</h1>
-        <p className="text-muted-foreground text-sm">{t("settings.subtitle")}</p>
-        <div className="relative mt-4 max-w-xl">
-          <SearchIcon className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" />
-          <Input
-            value={settingQuery}
-            onChange={(event) => setSettingQuery(event.target.value)}
-            placeholder={t("settings.searchPlaceholder")}
-            className="pl-9"
-            aria-label={t("settings.searchLabel")}
-          />
-        </div>
-      </div>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row lg:items-start">
-        <aside className="shrink-0 lg:sticky lg:top-4 lg:w-64">
-          <div className="rounded-xl border bg-card/60 p-2 shadow-sm">
-            <div className="px-3 pb-2 pt-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              {t("settings.directory")}
-            </div>
-            <nav className="flex gap-1 overflow-x-auto lg:flex-col" aria-label={t("settings.categoriesLabel")}>
-              {settingCategories.map((category) => {
-                const Icon = category.icon;
-                const active = !settingQuery.trim() && activeCategory === category.id;
-                return (
-                  <button
-                    key={category.id}
-                    type="button"
-                    onClick={() => {
-                      setActiveCategory(category.id);
-                      setSettingQuery("");
-                    }}
-                    className={`group flex min-w-max items-center gap-3 rounded-lg px-3 py-3 text-left transition-colors lg:min-w-0 ${
-                      active ? "bg-primary text-primary-foreground shadow-sm" : "hover:bg-muted"
-                    }`}
-                  >
-                    <Icon className="size-4 shrink-0" />
-                    <span className="min-w-0">
-                      <span className="block text-sm font-medium">{category.label}</span>
-                      <span
-                        className={`hidden truncate text-xs lg:block ${active ? "text-primary-foreground/75" : "text-muted-foreground"}`}
-                      >
-                        {category.hint}
-                      </span>
-                    </span>
-                  </button>
-                );
-              })}
-            </nav>
-          </div>
-        </aside>
-
-        <main className="min-w-0 flex-1">
-          <div className="mb-3 flex items-center justify-between gap-3 px-1">
-            <div>
-              <h2 className="text-base font-semibold">
-                {settingQuery.trim()
-                  ? t("settings.searchResults")
-                  : settingCategories.find((item) => item.id === activeCategory)?.label}
-              </h2>
-              <p className="text-muted-foreground text-xs">
-                {settingQuery.trim()
-                  ? t("settings.matchingSettings", { query: settingQuery.trim() })
-                  : settingCategories.find((item) => item.id === activeCategory)?.hint}
-              </p>
-            </div>
-            {settingQuery.trim() ? (
-              <Button type="button" variant="ghost" size="sm" onClick={() => setSettingQuery("")}>
-                {t("settings.clearSearch")}
-              </Button>
-            ) : null}
-          </div>
-
-          <div className="flex flex-col divide-y rounded-xl border bg-card/30 px-3 [&>[data-slot=card]]:mb-0 [&>[data-slot=card]]:rounded-none [&>[data-slot=card]]:bg-transparent [&>[data-slot=card]]:py-4 [&>[data-slot=card]]:ring-0">
-            {isSettingVisible("system", "settings.keywords.update") ? <UpdateCard /> : null}
-            {isSettingVisible("system", "settings.keywords.basicAuth") ? <BasicAuthCard /> : null}
-            {isSettingVisible("system", "settings.keywords.mcpServer") ? <McpServerCard /> : null}
-
-            <Card
-              className={`${isSettingVisible("traffic", "settings.keywords.trafficCapture") ? "" : "hidden"} mb-4 break-inside-avoid md:mb-6`}
-            >
+  const groups: SettingsGroupSpec[] = [
+    {
+      id: "traffic",
+      titleKey: "settings.overview.group.traffic",
+      descriptionKey: "settings.overview.hint.traffic",
+      cards: [
+        {
+          id: "traffic-capture",
+          keywords: "settings.keywords.trafficCapture",
+          saveMode: "instant",
+          content: (
+            <Card className="break-inside-avoid">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base">
                   <RadioTowerIcon className="size-4" />
@@ -799,10 +699,14 @@ export default function SystemSettingsPage() {
                 />
               </CardContent>
             </Card>
-
-            <Card
-              className={`${isSettingVisible("traffic", "settings.keywords.trafficBinding") ? "" : "hidden"} mb-4 break-inside-avoid md:mb-6`}
-            >
+          ),
+        },
+        {
+          id: "traffic-binding",
+          keywords: "settings.keywords.trafficBinding",
+          saveMode: "instant",
+          content: (
+            <Card className="break-inside-avoid">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base">
                   <RadioTowerIcon className="size-4" />
@@ -828,10 +732,14 @@ export default function SystemSettingsPage() {
                 />
               </CardContent>
             </Card>
-
-            <Card
-              className={`${isSettingVisible("traffic", "settings.keywords.browserSecurity") ? "" : "hidden"} mb-4 break-inside-avoid md:mb-6`}
-            >
+          ),
+        },
+        {
+          id: "browser-security",
+          keywords: "settings.keywords.browserSecurity",
+          saveMode: "instant",
+          content: (
+            <Card className="break-inside-avoid">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base">
                   <CameraIcon className="size-4" />
@@ -884,10 +792,14 @@ export default function SystemSettingsPage() {
                 </div>
               </CardContent>
             </Card>
-
-            <Card
-              className={`${isSettingVisible("traffic", "settings.keywords.globalProxy") ? "" : "hidden"} mb-4 break-inside-avoid md:mb-6`}
-            >
+          ),
+        },
+        {
+          id: "global-proxy",
+          keywords: "settings.keywords.globalProxy",
+          saveMode: "mixed",
+          content: (
+            <Card className="break-inside-avoid">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base">
                   <RadioTowerIcon className="size-4" />
@@ -925,7 +837,7 @@ export default function SystemSettingsPage() {
                   <p className="text-muted-foreground text-xs">
                     {globalProxyInput.trim() ? t("settings.proxyConfigured") : t("settings.proxyUnconfigured")}
                   </p>
-                  <details className="text-xs">
+                  <details open={settingQuery.trim() ? true : undefined} className="text-xs">
                     <summary className="text-muted-foreground cursor-pointer select-none">
                       {t("settings.howProxyWorks")}
                     </summary>
@@ -934,39 +846,6 @@ export default function SystemSettingsPage() {
                     </p>
                   </details>
                 </section>
-                <details className="text-xs">
-                  <summary className="text-muted-foreground cursor-pointer select-none">
-                    {t("settings.reconnection")}
-                  </summary>
-                  <div className="mt-3 space-y-3 rounded-md border p-3 sm:p-4">
-                    <p className="text-muted-foreground">{t("settings.reconnectionHelp")}</p>
-                    <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
-                      <div className="space-y-1.5">
-                        <Label htmlFor="proxy-reconnect-max">{t("settings.reconnectAttempts")}</Label>
-                        <Input
-                          id="proxy-reconnect-max"
-                          type="number"
-                          min={1}
-                          value={proxyReconnectMax}
-                          onChange={(e) => setProxyReconnectMax(e.target.value)}
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label htmlFor="proxy-reconnect-interval">{t("settings.reconnectInterval")}</Label>
-                        <Input
-                          id="proxy-reconnect-interval"
-                          type="number"
-                          min={1}
-                          value={proxyReconnectInterval}
-                          onChange={(e) => setProxyReconnectInterval(e.target.value)}
-                        />
-                      </div>
-                      <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={saveProxyReconnect}>
-                        {t("settings.savePolicy")}
-                      </Button>
-                    </div>
-                  </div>
-                </details>
                 <div className="flex items-center justify-between gap-4 rounded-md border px-3 py-2">
                   <div className="min-w-0">
                     <Label htmlFor="show-egress-ip" className="text-sm font-normal">
@@ -981,49 +860,6 @@ export default function SystemSettingsPage() {
                     onCheckedChange={(checked) => void toggleEgressVisibility(checked)}
                   />
                 </div>
-                {/* 紧贴结果区：用户看两行时正好需要它。细节放文档。 */}
-                <details className="text-xs">
-                  <summary className="text-muted-foreground cursor-pointer select-none">
-                    {t("settings.egressTestDetails")}
-                  </summary>
-                  <p className="text-muted-foreground mt-2 leading-relaxed">{t("settings.egressTestHelp")}</p>
-                </details>
-                {/* 内网里公网回显不可达，两行都会失败——不是代理坏了。 */}
-                <details className="text-xs">
-                  <summary className="text-muted-foreground cursor-pointer select-none">
-                    {t("settings.customProbe")}
-                  </summary>
-                  <div className="mt-2 flex flex-col gap-2">
-                    <Label htmlFor="egress-probe-url">{t("settings.probeUrl")}</Label>
-                    <div className="flex flex-col gap-2 sm:flex-row">
-                      <Input
-                        id="egress-probe-url"
-                        autoComplete="off"
-                        placeholder={t("settings.probePlaceholder")}
-                        value={egressProbeUrl}
-                        disabled={!settingsLoaded || savingEgressProbeUrl}
-                        onChange={(e) => {
-                          setEgressProbeUrl(e.target.value);
-                          clearEgressReport();
-                        }}
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        disabled={!settingsLoaded || savingEgressProbeUrl}
-                        onClick={() => void saveEgressProbeUrl()}
-                      >
-                        {savingEgressProbeUrl ? t("settings.saving") : t("settings.saveProbe")}
-                      </Button>
-                    </div>
-                    <span className="text-muted-foreground leading-relaxed">{t("settings.probePersistenceHelp")}</span>
-                    <span className="text-muted-foreground leading-relaxed">
-                      {t("settings.probeResponseStart")}
-                      <code>{'{"ip":"1.2.3.4"}'}</code>
-                      {t("settings.probeResponseEnd")}
-                    </span>
-                  </div>
-                </details>
                 {egressReport && (
                   <div className="flex flex-col gap-1 text-xs">
                     {egressReport.checks.map((c) => {
@@ -1098,236 +934,357 @@ export default function SystemSettingsPage() {
                     ))}
                   </div>
                 )}
-                <section className="space-y-3 border-t pt-4">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <p className="text-sm font-medium">
-                        {t("settings.proxyPool")}{" "}
-                        <span className="text-muted-foreground font-normal">{proxyPool.length}</span>
-                      </p>
-                      <p className="text-muted-foreground mt-1 text-xs">
-                        {t("settings.currentProxyPrefix")}
-                        {proxyPool.find((entry) => entry.id === proxyPoolActiveId)?.name ??
-                          (proxyPoolActiveId ? t("settings.selectedProxy") : t("settings.direct"))}
-                      </p>
-                    </div>
-                    <Button type="button" variant="outline" size="sm" onClick={testAllProxyPool}>
-                      {t("settings.testAll")}
-                    </Button>
-                  </div>
-                  <details className="rounded-md border px-3 py-2 text-xs">
-                    <summary className="text-muted-foreground cursor-pointer select-none">
-                      {t("settings.importProxies")}
-                    </summary>
-                    <Textarea
-                      className="mt-3 font-mono"
-                      rows={3}
-                      placeholder={t("settings.importPlaceholder")}
-                      value={proxyPoolText}
-                      onChange={(e) => setProxyPoolText(e.target.value)}
-                    />
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <Button type="button" size="sm" onClick={importProxyPool} disabled={!proxyPoolText.trim()}>
-                        {t("settings.import")}
-                      </Button>
-                      <span className="text-muted-foreground">{t("settings.proxyCredentialsHidden")}</span>
-                    </div>
-                  </details>
-                  <div className="space-y-2">
-                    {proxyPool.length === 0 ? (
-                      <p className="text-muted-foreground text-xs">{t("settings.emptyProxyPool")}</p>
-                    ) : (
-                      proxyPool.map((entry) => (
-                        <div
-                          key={entry.id}
-                          className="grid gap-3 rounded-md border p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
-                        >
-                          <div className="flex min-w-0 items-start gap-3">
-                            <Switch
-                              checked={entry.enabled}
-                              onCheckedChange={() => toggleProxyPoolEntry(entry)}
-                              aria-label={t("settings.enableProxy")}
-                            />
-                            <div className="grid min-w-0 flex-1 gap-x-5 gap-y-2 text-xs sm:grid-cols-2">
-                              <div className="min-w-0">
-                                <p className="text-muted-foreground">{t("settings.proxyAddress")}</p>
-                                <p className="truncate font-mono" title={entry.url}>
-                                  {entry.name ? `${entry.name} · ` : ""}
-                                  {entry.url}
-                                </p>
-                              </div>
-                              <div>
-                                <p className="text-muted-foreground">{t("settings.testOutboundIp")}</p>
-                                <p className="break-all font-mono">
-                                  {entry.egress_ip ||
-                                    (entry.last_error ? t("settings.probeFailed") : t("settings.notTested"))}
-                                </p>
-                              </div>
-                              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                                <span
-                                  className={
-                                    entry.health === "healthy"
-                                      ? "text-emerald-600"
-                                      : entry.health === "disabled"
-                                        ? "text-muted-foreground"
-                                        : "text-amber-600"
-                                  }
-                                >
-                                  {!entry.enabled
-                                    ? t("settings.disabled")
-                                    : entry.health === "healthy"
-                                      ? t("settings.healthy")
-                                      : entry.health === "unhealthy-cooling"
-                                        ? t("settings.coolingDown")
-                                        : t("settings.pendingCheck")}
-                                </span>
-                                {entry.id === proxyPoolActiveId && (
-                                  <span className="text-primary">{t("settings.activeProxy")}</span>
-                                )}
-                                <span className="text-muted-foreground">
-                                  {t("settings.failureCount", { count: entry.consecutive_failures })}
-                                </span>
-                              </div>
-                              <div className="text-muted-foreground">
-                                {entry.latency_ms != null ? `${entry.latency_ms} ms` : t("settings.noLatency")}
-                                {entry.last_checked_at &&
-                                  !entry.last_checked_at.startsWith("0001-") &&
-                                  ` · ${new Date(entry.last_checked_at).toLocaleTimeString(i18n.resolvedLanguage)}`}
-                                {entry.last_error && <span className="text-destructive"> · {entry.last_error}</span>}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex justify-end gap-1">
-                            <Button type="button" variant="ghost" size="sm" onClick={() => testOneProxyPool(entry.id)}>
-                              {t("settings.test")}
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => deleteProxyPoolEntry(entry.id)}
-                            >
-                              {t("settings.delete")}
-                            </Button>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                  <details className="rounded-md border px-3 py-2 text-xs">
-                    <summary className="text-muted-foreground cursor-pointer select-none">
-                      {t("settings.rotationHealth")}
-                    </summary>
-                    <div className="mt-3 space-y-3">
-                      <p className="text-muted-foreground">{t("settings.rotationHealthHelp")}</p>
-                      <div className="flex flex-wrap items-center gap-x-8 gap-y-3 border-b pb-3">
-                        <div className="flex items-center gap-3">
-                          <Label htmlFor="proxy-pool-timed">{t("settings.timedRotation")}</Label>
-                          <Switch id="proxy-pool-timed" checked={proxyPoolTimed} onCheckedChange={setProxyPoolTimed} />
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <Label htmlFor="proxy-pool-failure">{t("settings.failureRotation")}</Label>
-                          <Switch
-                            id="proxy-pool-failure"
-                            checked={proxyPoolFailure}
-                            onCheckedChange={setProxyPoolFailure}
-                          />
-                        </div>
-                      </div>
-                      <div className="grid max-w-2xl grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2">
-                        <div className="space-y-1.5">
-                          <Label htmlFor="proxy-pool-strategy">{t("settings.rotationOrder")}</Label>
-                          <Select
-                            value={proxyPoolStrategy}
-                            onValueChange={(v) => setProxyPoolStrategy(v as "sequential" | "random")}
-                          >
-                            <SelectTrigger id="proxy-pool-strategy" className="w-full">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="sequential">{t("settings.sequential")}</SelectItem>
-                              <SelectItem value="random">{t("settings.random")}</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label htmlFor="proxy-pool-interval">{t("settings.rotationInterval")}</Label>
-                          <Input
-                            id="proxy-pool-interval"
-                            type="number"
-                            min={3}
-                            value={proxyPoolInterval}
-                            onChange={(e) => setProxyPoolInterval(e.target.value)}
-                          />
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label htmlFor="proxy-pool-threshold">{t("settings.failureThreshold")}</Label>
-                          <Input
-                            id="proxy-pool-threshold"
-                            type="number"
-                            min={1}
-                            value={proxyPoolThreshold}
-                            onChange={(e) => setProxyPoolThreshold(e.target.value)}
-                          />
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label htmlFor="proxy-pool-cooldown">{t("settings.cooldown")}</Label>
-                          <Input
-                            id="proxy-pool-cooldown"
-                            type="number"
-                            min={1}
-                            value={proxyPoolCooldown}
-                            onChange={(e) => setProxyPoolCooldown(e.target.value)}
-                          />
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label htmlFor="proxy-pool-health-interval">{t("settings.healthInterval")}</Label>
-                          <Input
-                            id="proxy-pool-health-interval"
-                            type="number"
-                            min={1}
-                            value={proxyPoolHealthInterval}
-                            onChange={(e) => setProxyPoolHealthInterval(e.target.value)}
-                          />
-                        </div>
-                      </div>
-                      <div className="flex justify-end border-t pt-3">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="w-full sm:w-auto"
-                          onClick={saveProxyPoolStrategy}
-                        >
-                          {t("settings.saveRotation")}
-                        </Button>
-                      </div>
-                    </div>
-                  </details>
-                  {proxyPoolLogs.length > 0 && (
-                    <details className="text-xs">
+                <details
+                  open={settingQuery.trim() || proxyPool.some((entry) => entry.last_error) ? true : undefined}
+                  className="rounded-md border p-3"
+                >
+                  <summary className="cursor-pointer text-sm font-medium">
+                    {t("settings.overview.advancedProxy")}
+                  </summary>
+                  <div className="mt-3 flex flex-col gap-4">
+                    <details open={settingQuery.trim() ? true : undefined} className="text-xs">
                       <summary className="text-muted-foreground cursor-pointer select-none">
-                        {t("settings.switchHistory", { count: proxyPoolLogs.length })}
+                        {t("settings.reconnection")}
                       </summary>
-                      <div className="mt-2 space-y-1">
-                        {proxyPoolLogs
-                          .slice(-5)
-                          .reverse()
-                          .map((log) => (
-                            <p key={`${log.at}-${log.to}`} className="text-muted-foreground">
-                              {new Date(log.at).toLocaleTimeString(i18n.resolvedLanguage)} ·{" "}
-                              {log.from || t("settings.direct")} → {log.to || t("settings.direct")} · {log.reason}
-                            </p>
-                          ))}
+                      <div className="mt-3 space-y-3 rounded-md border p-3 sm:p-4">
+                        <p className="text-muted-foreground">{t("settings.reconnectionHelp")}</p>
+                        <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+                          <div className="space-y-1.5">
+                            <Label htmlFor="proxy-reconnect-max">{t("settings.reconnectAttempts")}</Label>
+                            <Input
+                              id="proxy-reconnect-max"
+                              type="number"
+                              min={1}
+                              value={proxyReconnectMax}
+                              onChange={(e) => setProxyReconnectMax(e.target.value)}
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label htmlFor="proxy-reconnect-interval">{t("settings.reconnectInterval")}</Label>
+                            <Input
+                              id="proxy-reconnect-interval"
+                              type="number"
+                              min={1}
+                              value={proxyReconnectInterval}
+                              onChange={(e) => setProxyReconnectInterval(e.target.value)}
+                            />
+                          </div>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="w-full sm:w-auto"
+                            onClick={saveProxyReconnect}
+                          >
+                            {t("settings.savePolicy")}
+                          </Button>
+                        </div>
                       </div>
                     </details>
-                  )}
-                </section>
+                    {/* 紧贴结果区：用户看两行时正好需要它。细节放文档。 */}
+                    <details open={settingQuery.trim() ? true : undefined} className="text-xs">
+                      <summary className="text-muted-foreground cursor-pointer select-none">
+                        {t("settings.egressTestDetails")}
+                      </summary>
+                      <p className="text-muted-foreground mt-2 leading-relaxed">{t("settings.egressTestHelp")}</p>
+                    </details>
+                    {/* 内网里公网回显不可达，两行都会失败——不是代理坏了。 */}
+                    <details open={settingQuery.trim() ? true : undefined} className="text-xs">
+                      <summary className="text-muted-foreground cursor-pointer select-none">
+                        {t("settings.customProbe")}
+                      </summary>
+                      <div className="mt-2 flex flex-col gap-2">
+                        <Label htmlFor="egress-probe-url">{t("settings.probeUrl")}</Label>
+                        <div className="flex flex-col gap-2 sm:flex-row">
+                          <Input
+                            id="egress-probe-url"
+                            autoComplete="off"
+                            placeholder={t("settings.probePlaceholder")}
+                            value={egressProbeUrl}
+                            disabled={!settingsLoaded || savingEgressProbeUrl}
+                            onChange={(e) => {
+                              setEgressProbeUrl(e.target.value);
+                              clearEgressReport();
+                            }}
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            disabled={!settingsLoaded || savingEgressProbeUrl}
+                            onClick={() => void saveEgressProbeUrl()}
+                          >
+                            {savingEgressProbeUrl ? t("settings.saving") : t("settings.saveProbe")}
+                          </Button>
+                        </div>
+                        <span className="text-muted-foreground leading-relaxed">
+                          {t("settings.probePersistenceHelp")}
+                        </span>
+                        <span className="text-muted-foreground leading-relaxed">
+                          {t("settings.probeResponseStart")}
+                          <code>{'{"ip":"1.2.3.4"}'}</code>
+                          {t("settings.probeResponseEnd")}
+                        </span>
+                      </div>
+                    </details>
+                    <section className="space-y-3 border-t pt-4">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-medium">
+                            {t("settings.proxyPool")}{" "}
+                            <span className="text-muted-foreground font-normal">{proxyPool.length}</span>
+                          </p>
+                          <p className="text-muted-foreground mt-1 text-xs">
+                            {t("settings.currentProxyPrefix")}
+                            {proxyPool.find((entry) => entry.id === proxyPoolActiveId)?.name ??
+                              (proxyPoolActiveId ? t("settings.selectedProxy") : t("settings.direct"))}
+                          </p>
+                        </div>
+                        <Button type="button" variant="outline" size="sm" onClick={testAllProxyPool}>
+                          {t("settings.testAll")}
+                        </Button>
+                      </div>
+                      <details
+                        open={settingQuery.trim() ? true : undefined}
+                        className="rounded-md border px-3 py-2 text-xs"
+                      >
+                        <summary className="text-muted-foreground cursor-pointer select-none">
+                          {t("settings.importProxies")}
+                        </summary>
+                        <Textarea
+                          className="mt-3 font-mono"
+                          rows={3}
+                          placeholder={t("settings.importPlaceholder")}
+                          value={proxyPoolText}
+                          onChange={(e) => setProxyPoolText(e.target.value)}
+                        />
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <Button type="button" size="sm" onClick={importProxyPool} disabled={!proxyPoolText.trim()}>
+                            {t("settings.import")}
+                          </Button>
+                          <span className="text-muted-foreground">{t("settings.proxyCredentialsHidden")}</span>
+                        </div>
+                      </details>
+                      <div className="space-y-2">
+                        {proxyPool.length === 0 ? (
+                          <p className="text-muted-foreground text-xs">{t("settings.emptyProxyPool")}</p>
+                        ) : (
+                          proxyPool.map((entry) => (
+                            <div
+                              key={entry.id}
+                              className="grid gap-3 rounded-md border p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+                            >
+                              <div className="flex min-w-0 items-start gap-3">
+                                <Switch
+                                  checked={entry.enabled}
+                                  onCheckedChange={() => toggleProxyPoolEntry(entry)}
+                                  aria-label={t("settings.enableProxy")}
+                                />
+                                <div className="grid min-w-0 flex-1 gap-x-5 gap-y-2 text-xs sm:grid-cols-2">
+                                  <div className="min-w-0">
+                                    <p className="text-muted-foreground">{t("settings.proxyAddress")}</p>
+                                    <p className="truncate font-mono" title={entry.url}>
+                                      {entry.name ? `${entry.name} · ` : ""}
+                                      {entry.url}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <p className="text-muted-foreground">{t("settings.testOutboundIp")}</p>
+                                    <p className="break-all font-mono">
+                                      {entry.egress_ip ||
+                                        (entry.last_error ? t("settings.probeFailed") : t("settings.notTested"))}
+                                    </p>
+                                  </div>
+                                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                    <span
+                                      className={
+                                        entry.health === "healthy"
+                                          ? "text-emerald-600"
+                                          : entry.health === "disabled"
+                                            ? "text-muted-foreground"
+                                            : "text-amber-600"
+                                      }
+                                    >
+                                      {!entry.enabled
+                                        ? t("settings.disabled")
+                                        : entry.health === "healthy"
+                                          ? t("settings.healthy")
+                                          : entry.health === "unhealthy-cooling"
+                                            ? t("settings.coolingDown")
+                                            : t("settings.pendingCheck")}
+                                    </span>
+                                    {entry.id === proxyPoolActiveId && (
+                                      <span className="text-primary">{t("settings.activeProxy")}</span>
+                                    )}
+                                    <span className="text-muted-foreground">
+                                      {t("settings.failureCount", { count: entry.consecutive_failures })}
+                                    </span>
+                                  </div>
+                                  <div className="text-muted-foreground">
+                                    {entry.latency_ms != null ? `${entry.latency_ms} ms` : t("settings.noLatency")}
+                                    {entry.last_checked_at &&
+                                      !entry.last_checked_at.startsWith("0001-") &&
+                                      ` · ${new Date(entry.last_checked_at).toLocaleTimeString(i18n.resolvedLanguage)}`}
+                                    {entry.last_error && (
+                                      <span className="text-destructive"> · {entry.last_error}</span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="flex justify-end gap-1">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => testOneProxyPool(entry.id)}
+                                >
+                                  {t("settings.test")}
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => deleteProxyPoolEntry(entry.id)}
+                                >
+                                  {t("settings.delete")}
+                                </Button>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                      <details
+                        open={settingQuery.trim() ? true : undefined}
+                        className="rounded-md border px-3 py-2 text-xs"
+                      >
+                        <summary className="text-muted-foreground cursor-pointer select-none">
+                          {t("settings.rotationHealth")}
+                        </summary>
+                        <div className="mt-3 space-y-3">
+                          <p className="text-muted-foreground">{t("settings.rotationHealthHelp")}</p>
+                          <div className="flex flex-wrap items-center gap-x-8 gap-y-3 border-b pb-3">
+                            <div className="flex items-center gap-3">
+                              <Label htmlFor="proxy-pool-timed">{t("settings.timedRotation")}</Label>
+                              <Switch
+                                id="proxy-pool-timed"
+                                checked={proxyPoolTimed}
+                                onCheckedChange={setProxyPoolTimed}
+                              />
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <Label htmlFor="proxy-pool-failure">{t("settings.failureRotation")}</Label>
+                              <Switch
+                                id="proxy-pool-failure"
+                                checked={proxyPoolFailure}
+                                onCheckedChange={setProxyPoolFailure}
+                              />
+                            </div>
+                          </div>
+                          <div className="grid max-w-2xl grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2">
+                            <div className="space-y-1.5">
+                              <Label htmlFor="proxy-pool-strategy">{t("settings.rotationOrder")}</Label>
+                              <Select
+                                value={proxyPoolStrategy}
+                                onValueChange={(v) => setProxyPoolStrategy(v as "sequential" | "random")}
+                              >
+                                <SelectTrigger id="proxy-pool-strategy" className="w-full">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="sequential">{t("settings.sequential")}</SelectItem>
+                                  <SelectItem value="random">{t("settings.random")}</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label htmlFor="proxy-pool-interval">{t("settings.rotationInterval")}</Label>
+                              <Input
+                                id="proxy-pool-interval"
+                                type="number"
+                                min={3}
+                                value={proxyPoolInterval}
+                                onChange={(e) => setProxyPoolInterval(e.target.value)}
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label htmlFor="proxy-pool-threshold">{t("settings.failureThreshold")}</Label>
+                              <Input
+                                id="proxy-pool-threshold"
+                                type="number"
+                                min={1}
+                                value={proxyPoolThreshold}
+                                onChange={(e) => setProxyPoolThreshold(e.target.value)}
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label htmlFor="proxy-pool-cooldown">{t("settings.cooldown")}</Label>
+                              <Input
+                                id="proxy-pool-cooldown"
+                                type="number"
+                                min={1}
+                                value={proxyPoolCooldown}
+                                onChange={(e) => setProxyPoolCooldown(e.target.value)}
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label htmlFor="proxy-pool-health-interval">{t("settings.healthInterval")}</Label>
+                              <Input
+                                id="proxy-pool-health-interval"
+                                type="number"
+                                min={1}
+                                value={proxyPoolHealthInterval}
+                                onChange={(e) => setProxyPoolHealthInterval(e.target.value)}
+                              />
+                            </div>
+                          </div>
+                          <div className="flex justify-end border-t pt-3">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className="w-full sm:w-auto"
+                              onClick={saveProxyPoolStrategy}
+                            >
+                              {t("settings.saveRotation")}
+                            </Button>
+                          </div>
+                        </div>
+                      </details>
+                      {proxyPoolLogs.length > 0 && (
+                        <details open={settingQuery.trim() ? true : undefined} className="text-xs">
+                          <summary className="text-muted-foreground cursor-pointer select-none">
+                            {t("settings.switchHistory", { count: proxyPoolLogs.length })}
+                          </summary>
+                          <div className="mt-2 space-y-1">
+                            {proxyPoolLogs
+                              .slice(-5)
+                              .reverse()
+                              .map((log) => (
+                                <p key={`${log.at}-${log.to}`} className="text-muted-foreground">
+                                  {new Date(log.at).toLocaleTimeString(i18n.resolvedLanguage)} ·{" "}
+                                  {log.from || t("settings.direct")} → {log.to || t("settings.direct")} · {log.reason}
+                                </p>
+                              ))}
+                          </div>
+                        </details>
+                      )}
+                    </section>
+                  </div>
+                </details>
               </CardContent>
             </Card>
-
-            <Card
-              className={`${isSettingVisible("agent", "settings.keywords.constraints") ? "" : "hidden"} mb-4 break-inside-avoid md:mb-6`}
-            >
+          ),
+        },
+      ],
+    },
+    {
+      id: "agent",
+      titleKey: "settings.overview.group.agent",
+      descriptionKey: "settings.overview.hint.agent",
+      cards: [
+        {
+          id: "constraints",
+          keywords: "settings.keywords.constraints",
+          saveMode: "instant",
+          content: (
+            <Card className="break-inside-avoid">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base">
                   <ShieldAlertIcon className="size-4" />
@@ -1372,76 +1329,14 @@ export default function SystemSettingsPage() {
                 </div>
               </CardContent>
             </Card>
-
-            <Card
-              className={`${isSettingVisible("agent", "settings.keywords.noa") ? "" : "hidden"} mb-4 break-inside-avoid md:mb-6`}
-            >
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <FlaskConicalIcon className="size-4" />
-                  {t("settings.experimental")}
-                </CardTitle>
-                <CardDescription>
-                  {t("settings.experimentalHelp")}
-                  <br />
-                  <b>{t("settings.noa")}</b>
-                  {t("settings.noaHelpStart")}
-                  <b>{t("settings.noaAgentTypes")}</b>
-                  {t("settings.noaHelpEnd")}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="flex items-center justify-between gap-4">
-                <Label htmlFor="noa-compaction" className="text-sm font-normal text-muted-foreground">
-                  {t("settings.noa")}
-                  {noaCompaction ? t("settings.enabledSuffix") : t("settings.disabledSuffix")}
-                </Label>
-                <Switch
-                  id="noa-compaction"
-                  checked={noaCompaction}
-                  disabled={!loaded}
-                  onCheckedChange={toggleNoaCompaction}
-                />
-              </CardContent>
-            </Card>
-
-            <Card
-              className={`${isSettingVisible("agent", "settings.keywords.autoTitles") ? "" : "hidden"} mb-4 break-inside-avoid md:mb-6`}
-            >
-              <CardHeader>
-                <CardTitle>{t("settings.autoTitles")}</CardTitle>
-                <CardDescription>{t("settings.autoTitlesHelp")}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Field orientation="horizontal">
-                  <FieldContent>
-                    <FieldLabel htmlFor="task-auto-title">{t("settings.taskNames")}</FieldLabel>
-                    <FieldDescription>{t("settings.taskNamesHelp")}</FieldDescription>
-                  </FieldContent>
-                  <Switch
-                    id="task-auto-title"
-                    checked={taskAutoTitleEnabled}
-                    disabled={!loaded}
-                    onCheckedChange={(value) => toggleAutoTitle("task_auto_title_enabled", value)}
-                  />
-                </Field>
-                <Field orientation="horizontal" className="mt-5">
-                  <FieldContent>
-                    <FieldLabel htmlFor="chat-auto-title">{t("settings.chatTitles")}</FieldLabel>
-                    <FieldDescription>{t("settings.chatTitlesHelp")}</FieldDescription>
-                  </FieldContent>
-                  <Switch
-                    id="chat-auto-title"
-                    checked={chatAutoTitleEnabled}
-                    disabled={!loaded}
-                    onCheckedChange={(value) => toggleAutoTitle("chat_auto_title_enabled", value)}
-                  />
-                </Field>
-              </CardContent>
-            </Card>
-
-            <Card
-              className={`${isSettingVisible("agent", "settings.keywords.intelligence") ? "" : "hidden"} mb-4 break-inside-avoid md:mb-6`}
-            >
+          ),
+        },
+        {
+          id: "intelligence",
+          keywords: "settings.keywords.intelligence",
+          saveMode: "instant",
+          content: (
+            <Card className="break-inside-avoid">
               <CardHeader>
                 <CardTitle>{t("settings.intelligence")}</CardTitle>
                 <CardDescription>{t("settings.intelligenceHelp")}</CardDescription>
@@ -1500,10 +1395,191 @@ export default function SystemSettingsPage() {
                 ) : null}
               </CardContent>
             </Card>
-
-            <Card
-              className={`${isSettingVisible("network", "settings.keywords.webSearch") ? "" : "hidden"} mb-4 break-inside-avoid md:mb-6`}
-            >
+          ),
+        },
+        {
+          id: "workers",
+          keywords: "settings.keywords.workers",
+          saveMode: "form",
+          content: (
+            <Card className="break-inside-avoid">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <CpuIcon className="size-4" />
+                  {t("settings.workers")}
+                </CardTitle>
+                <CardDescription>
+                  {t("settings.workersHelpStart")}
+                  <b>{t("settings.futureTasksOnly")}</b>
+                  {t("settings.runningTasksUnchanged")}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-3">
+                <details open={settingQuery.trim() ? true : undefined} className="rounded-md border p-3">
+                  <summary className="cursor-pointer text-sm font-medium">{t("settings.overview.workerPools")}</summary>
+                  <div className="mt-3 flex flex-col gap-4">
+                    <div className="flex flex-col gap-2 rounded-md border p-3">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-sm">{t("settings.workerPools")}</Label>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={addWorkerPool}
+                          disabled={!loaded || !settingsLoaded || savingWorkers}
+                        >
+                          {t("settings.addPool")}
+                        </Button>
+                      </div>
+                      {workerPools.map((pool, index) => {
+                        const selected = llmProfiles.find((profile) => profile.id === pool.profile_id);
+                        const placeholder =
+                          selected?.name ||
+                          (pool.profile_id
+                            ? t("settings.unavailableProfile", { id: pool.profile_id })
+                            : t("settings.chooseProfile"));
+                        return (
+                          // biome-ignore lint/suspicious/noArrayIndexKey: pool rows are edited in place and only deleted.
+                          <div className="flex items-center gap-2" key={`${pool.profile_id}-${index}`}>
+                            <Select
+                              value={pool.profile_id || undefined}
+                              disabled={!settingsLoaded || savingWorkers}
+                              onValueChange={(value) =>
+                                setWorkerPools((current) =>
+                                  current.map((item, itemIndex) =>
+                                    itemIndex === index ? { ...item, profile_id: value } : item,
+                                  ),
+                                )
+                              }
+                            >
+                              <SelectTrigger className="min-w-0 flex-1">
+                                <SelectValue placeholder={placeholder} />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {!selected && pool.profile_id ? (
+                                  <SelectItem value={pool.profile_id}>
+                                    {t("settings.profilePrefix")}
+                                    {pool.profile_id}
+                                    {t("settings.profileUnavailableSuffix")}
+                                  </SelectItem>
+                                ) : null}
+                                {llmProfiles
+                                  .filter((profile) => profile.format !== "jev")
+                                  .map((profile) => (
+                                    <SelectItem key={profile.id} value={profile.id}>
+                                      {profile.name} · {profile.model}
+                                    </SelectItem>
+                                  ))}
+                              </SelectContent>
+                            </Select>
+                            <Input
+                              type="number"
+                              min={1}
+                              className="w-24 font-mono text-sm"
+                              value={pool.workers}
+                              disabled={!settingsLoaded || savingWorkers}
+                              onChange={(event) =>
+                                setWorkerPools((current) =>
+                                  current.map((item, itemIndex) =>
+                                    itemIndex === index ? { ...item, workers: Number(event.target.value) } : item,
+                                  ),
+                                )
+                              }
+                            />
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled={!settingsLoaded || savingWorkers}
+                              onClick={() =>
+                                setWorkerPools((current) => current.filter((_, itemIndex) => itemIndex !== index))
+                              }
+                            >
+                              {t("settings.delete")}
+                            </Button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </details>
+                {workerPools.length > 0 ? (
+                  <div className="text-muted-foreground text-sm">
+                    {t("settings.workerTotal", {
+                      count: workerPools.reduce((sum, pool) => sum + (Number(pool.workers) || 0), 0),
+                    })}
+                  </div>
+                ) : null}
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    min={1}
+                    className="w-32 font-mono text-sm"
+                    placeholder="3"
+                    value={workers}
+                    disabled={!loaded || !settingsLoaded || savingWorkers || workerPools.length > 0}
+                    onChange={(e) => setWorkers(e.target.value)}
+                  />
+                  {workerPools.length > 0 ? (
+                    <span className="text-muted-foreground text-xs">{t("settings.poolConcurrencyHelp")}</span>
+                  ) : null}
+                  <Button onClick={saveWorkers} disabled={!loaded || !settingsLoaded || savingWorkers}>
+                    {t("settings.save")}
+                  </Button>
+                </div>
+                {!settingsLoaded && loaded ? (
+                  <p className="text-destructive text-xs">{t("settings.workerConfigLockedHelp")}</p>
+                ) : null}
+              </CardContent>
+            </Card>
+          ),
+        },
+        {
+          id: "noa",
+          keywords: "settings.keywords.noa",
+          saveMode: "experimental",
+          content: (
+            <Card className="break-inside-avoid">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <FlaskConicalIcon className="size-4" />
+                  {t("settings.experimental")}
+                </CardTitle>
+                <CardDescription>
+                  {t("settings.experimentalHelp")}
+                  <br />
+                  <b>{t("settings.noa")}</b>
+                  {t("settings.noaHelpStart")}
+                  <b>{t("settings.noaAgentTypes")}</b>
+                  {t("settings.noaHelpEnd")}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="flex items-center justify-between gap-4">
+                <Label htmlFor="noa-compaction" className="text-sm font-normal text-muted-foreground">
+                  {t("settings.noa")}
+                  {noaCompaction ? t("settings.enabledSuffix") : t("settings.disabledSuffix")}
+                </Label>
+                <Switch
+                  id="noa-compaction"
+                  checked={noaCompaction}
+                  disabled={!loaded}
+                  onCheckedChange={toggleNoaCompaction}
+                />
+              </CardContent>
+            </Card>
+          ),
+        },
+      ],
+    },
+    {
+      id: "tools",
+      titleKey: "settings.overview.group.tools",
+      descriptionKey: "settings.overview.hint.tools",
+      cards: [
+        {
+          id: "web-search",
+          keywords: "settings.keywords.webSearch",
+          saveMode: "mixed",
+          content: (
+            <Card className="break-inside-avoid">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base">
                   <SearchIcon className="size-4" />
@@ -1649,48 +1725,59 @@ export default function SystemSettingsPage() {
                   </div>
                 )}
 
-                {webSearch && (
-                  <div className="flex flex-col gap-2">
-                    <Label htmlFor="ws-proxy" className="text-sm font-normal text-muted-foreground">
-                      {t("settings.outboundProxy")}
-                    </Label>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        id="ws-proxy"
-                        autoComplete="off"
-                        placeholder={t("settings.proxyPlaceholder")}
-                        value={proxyInput}
-                        disabled={!loaded || savingProxy}
-                        onChange={(e) => setProxyInput(e.target.value)}
-                      />
-                      <Button type="button" onClick={saveProxy} disabled={!loaded || savingProxy}>
-                        {t("settings.save")}
-                      </Button>
-                    </div>
-                    <p className="text-muted-foreground text-xs">{t("settings.searchProxyHelp")}</p>
-                  </div>
-                )}
+                <details open={settingQuery.trim() || testing ? true : undefined} className="rounded-md border p-3">
+                  <summary className="cursor-pointer text-sm font-medium">
+                    {t("settings.overview.advancedSearch")}
+                  </summary>
+                  <div className="mt-3 flex flex-col gap-4">
+                    {webSearch && (
+                      <div className="flex flex-col gap-2">
+                        <Label htmlFor="ws-proxy" className="text-sm font-normal text-muted-foreground">
+                          {t("settings.outboundProxy")}
+                        </Label>
+                        <div className="flex items-center gap-2">
+                          <Input
+                            id="ws-proxy"
+                            autoComplete="off"
+                            placeholder={t("settings.proxyPlaceholder")}
+                            value={proxyInput}
+                            disabled={!loaded || savingProxy}
+                            onChange={(e) => setProxyInput(e.target.value)}
+                          />
+                          <Button type="button" onClick={saveProxy} disabled={!loaded || savingProxy}>
+                            {t("settings.save")}
+                          </Button>
+                        </div>
+                        <p className="text-muted-foreground text-xs">{t("settings.searchProxyHelp")}</p>
+                      </div>
+                    )}
 
-                {webSearch && (
-                  <div className="flex items-center justify-between gap-4 border-t pt-4">
-                    <p className="text-muted-foreground text-xs">{t("settings.searchTestHelp")}</p>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={runTest}
-                      disabled={!loaded || testing}
-                      className="shrink-0"
-                    >
-                      {testing ? t("settings.testing") : t("settings.testSearch")}
-                    </Button>
+                    {webSearch && (
+                      <div className="flex items-center justify-between gap-4 border-t pt-4">
+                        <p className="text-muted-foreground text-xs">{t("settings.searchTestHelp")}</p>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={runTest}
+                          disabled={!loaded || testing}
+                          className="shrink-0"
+                        >
+                          {testing ? t("settings.testing") : t("settings.testSearch")}
+                        </Button>
+                      </div>
+                    )}
                   </div>
-                )}
+                </details>
               </CardContent>
             </Card>
-
-            <Card
-              className={`${isSettingVisible("network", "settings.keywords.python") ? "" : "hidden"} mb-4 break-inside-avoid md:mb-6`}
-            >
+          ),
+        },
+        {
+          id: "python",
+          keywords: "settings.keywords.python",
+          saveMode: "form",
+          content: (
+            <Card className="break-inside-avoid">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base">
                   <RadioTowerIcon className="size-4" />
@@ -1720,136 +1807,53 @@ export default function SystemSettingsPage() {
                 </div>
               </CardContent>
             </Card>
-
-            <Card
-              className={`${isSettingVisible("network", "settings.keywords.workers") ? "" : "hidden"} mb-4 break-inside-avoid md:mb-6`}
-            >
+          ),
+        },
+        {
+          id: "auto-titles",
+          keywords: "settings.keywords.autoTitles",
+          saveMode: "instant",
+          content: (
+            <Card className="break-inside-avoid">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <CpuIcon className="size-4" />
-                  {t("settings.workers")}
-                </CardTitle>
-                <CardDescription>
-                  {t("settings.workersHelpStart")}
-                  <b>{t("settings.futureTasksOnly")}</b>
-                  {t("settings.runningTasksUnchanged")}
-                </CardDescription>
+                <CardTitle>{t("settings.autoTitles")}</CardTitle>
+                <CardDescription>{t("settings.autoTitlesHelp")}</CardDescription>
               </CardHeader>
-              <CardContent className="flex flex-col gap-3">
-                <div className="flex flex-col gap-2 rounded-md border p-3">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-sm">{t("settings.workerPools")}</Label>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={addWorkerPool}
-                      disabled={!loaded || !settingsLoaded || savingWorkers}
-                    >
-                      {t("settings.addPool")}
-                    </Button>
-                  </div>
-                  {workerPools.map((pool, index) => {
-                    const selected = llmProfiles.find((profile) => profile.id === pool.profile_id);
-                    const placeholder =
-                      selected?.name ||
-                      (pool.profile_id
-                        ? t("settings.unavailableProfile", { id: pool.profile_id })
-                        : t("settings.chooseProfile"));
-                    return (
-                      // biome-ignore lint/suspicious/noArrayIndexKey: pool rows are edited in place and only deleted.
-                      <div className="flex items-center gap-2" key={`${pool.profile_id}-${index}`}>
-                        <Select
-                          value={pool.profile_id || undefined}
-                          disabled={!settingsLoaded || savingWorkers}
-                          onValueChange={(value) =>
-                            setWorkerPools((current) =>
-                              current.map((item, itemIndex) =>
-                                itemIndex === index ? { ...item, profile_id: value } : item,
-                              ),
-                            )
-                          }
-                        >
-                          <SelectTrigger className="min-w-0 flex-1">
-                            <SelectValue placeholder={placeholder} />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {!selected && pool.profile_id ? (
-                              <SelectItem value={pool.profile_id}>
-                                {t("settings.profilePrefix")}
-                                {pool.profile_id}
-                                {t("settings.profileUnavailableSuffix")}
-                              </SelectItem>
-                            ) : null}
-                            {llmProfiles
-                              .filter((profile) => profile.format !== "jev")
-                              .map((profile) => (
-                                <SelectItem key={profile.id} value={profile.id}>
-                                  {profile.name} · {profile.model}
-                                </SelectItem>
-                              ))}
-                          </SelectContent>
-                        </Select>
-                        <Input
-                          type="number"
-                          min={1}
-                          className="w-24 font-mono text-sm"
-                          value={pool.workers}
-                          disabled={!settingsLoaded || savingWorkers}
-                          onChange={(event) =>
-                            setWorkerPools((current) =>
-                              current.map((item, itemIndex) =>
-                                itemIndex === index ? { ...item, workers: Number(event.target.value) } : item,
-                              ),
-                            )
-                          }
-                        />
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          disabled={!settingsLoaded || savingWorkers}
-                          onClick={() =>
-                            setWorkerPools((current) => current.filter((_, itemIndex) => itemIndex !== index))
-                          }
-                        >
-                          {t("settings.delete")}
-                        </Button>
-                      </div>
-                    );
-                  })}
-                  {workerPools.length > 0 ? (
-                    <div className="text-muted-foreground text-sm">
-                      {t("settings.workerTotal", {
-                        count: workerPools.reduce((sum, pool) => sum + (Number(pool.workers) || 0), 0),
-                      })}
-                    </div>
-                  ) : null}
-                </div>
-                <div className="flex items-center gap-2">
-                  <Input
-                    type="number"
-                    min={1}
-                    className="w-32 font-mono text-sm"
-                    placeholder="3"
-                    value={workers}
-                    disabled={!loaded || !settingsLoaded || savingWorkers || workerPools.length > 0}
-                    onChange={(e) => setWorkers(e.target.value)}
+              <CardContent>
+                <Field orientation="horizontal">
+                  <FieldContent>
+                    <FieldLabel htmlFor="task-auto-title">{t("settings.taskNames")}</FieldLabel>
+                    <FieldDescription>{t("settings.taskNamesHelp")}</FieldDescription>
+                  </FieldContent>
+                  <Switch
+                    id="task-auto-title"
+                    checked={taskAutoTitleEnabled}
+                    disabled={!loaded}
+                    onCheckedChange={(value) => toggleAutoTitle("task_auto_title_enabled", value)}
                   />
-                  {workerPools.length > 0 ? (
-                    <span className="text-muted-foreground text-xs">{t("settings.poolConcurrencyHelp")}</span>
-                  ) : null}
-                  <Button onClick={saveWorkers} disabled={!loaded || !settingsLoaded || savingWorkers}>
-                    {t("settings.save")}
-                  </Button>
-                </div>
-                {!settingsLoaded && loaded ? (
-                  <p className="text-destructive text-xs">{t("settings.workerConfigLockedHelp")}</p>
-                ) : null}
+                </Field>
+                <Field orientation="horizontal" className="mt-5">
+                  <FieldContent>
+                    <FieldLabel htmlFor="chat-auto-title">{t("settings.chatTitles")}</FieldLabel>
+                    <FieldDescription>{t("settings.chatTitlesHelp")}</FieldDescription>
+                  </FieldContent>
+                  <Switch
+                    id="chat-auto-title"
+                    checked={chatAutoTitleEnabled}
+                    disabled={!loaded}
+                    onCheckedChange={(value) => toggleAutoTitle("chat_auto_title_enabled", value)}
+                  />
+                </Field>
               </CardContent>
             </Card>
-
-            <Card
-              className={`${isSettingVisible("chat", "settings.keywords.chatSend") ? "" : "hidden"} mb-4 break-inside-avoid md:mb-6`}
-            >
+          ),
+        },
+        {
+          id: "chat-send",
+          keywords: "settings.keywords.chatSend",
+          saveMode: "browser",
+          content: (
+            <Card className="break-inside-avoid">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base">
                   <KeyboardIcon className="size-4" />
@@ -1881,9 +1885,37 @@ export default function SystemSettingsPage() {
                 </Select>
               </CardContent>
             </Card>
-          </div>
-        </main>
-      </div>
-    </div>
-  );
+          ),
+        },
+      ],
+    },
+    {
+      id: "access",
+      titleKey: "settings.overview.group.access",
+      descriptionKey: "settings.overview.hint.access",
+      cards: [
+        {
+          id: "basic-auth",
+          keywords: "settings.keywords.basicAuth",
+          saveMode: "form",
+          content: <BasicAuthCard expandAdvanced={Boolean(settingQuery.trim())} />,
+        },
+        {
+          id: "update",
+          keywords: "settings.keywords.update",
+          saveMode: "confirm",
+          content: <UpdateCard expandAdvanced={Boolean(settingQuery.trim())} />,
+        },
+        {
+          id: "mcp-server",
+          keywords: "settings.keywords.mcpServer",
+          saveMode: "mixed",
+          wide: true,
+          content: <McpServerCard expandAdvanced={Boolean(settingQuery.trim())} />,
+        },
+      ],
+    },
+  ];
+
+  return <SettingsOverview groups={groups} query={settingQuery} onQueryChange={setSettingQuery} />;
 }

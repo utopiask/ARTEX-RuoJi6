@@ -122,6 +122,29 @@ func (e *Engine) ResolveDomain(id int64, host string) { e.enqueue(job{jobDNS, id
 // ProbeSite enqueues an HTTP probe for a web-asset (site). rawURL is the site URL.
 func (e *Engine) ProbeSite(id int64, rawURL string) { e.enqueue(job{jobHTTP, id, rawURL}) }
 
+// TryResolveDomain/TryProbeSite enqueue with an explicit success result so the
+// asset import probe step can report 已排队/未排队（§11：队列满不能伪报完成）。
+// They behave like ResolveDomain/ProbeSite otherwise.
+func (e *Engine) TryResolveDomain(id int64, host string) bool {
+	return e.tryEnqueue(job{jobDNS, id, host})
+}
+
+func (e *Engine) TryProbeSite(id int64, rawURL string) bool {
+	return e.tryEnqueue(job{jobHTTP, id, rawURL})
+}
+
+func (e *Engine) tryEnqueue(j job) bool {
+	if e == nil || id0(j.id) || j.arg == "" {
+		return false
+	}
+	select {
+	case e.jobs <- j:
+		return true
+	default: // queue full → 调用方可见，不再静默丢弃
+		return false
+	}
+}
+
 func (e *Engine) enqueue(j job) {
 	if e == nil || id0(j.id) || j.arg == "" {
 		return

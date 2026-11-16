@@ -959,6 +959,17 @@ export interface TrafficExchange {
   resp_len: number;
 }
 
+export interface TrafficStorage {
+  total_bytes: number;
+  index_bytes: number;
+  external_bytes: number;
+  updated_at?: string;
+  refreshing: boolean;
+  ready: boolean;
+  stale: boolean;
+  error?: string;
+}
+
 export interface TrafficResp {
   enabled: boolean;
   proxy?: string;
@@ -1996,4 +2007,108 @@ export interface TaskFileListing {
   size: number;
   truncated: boolean;
   missing: boolean;
+}
+
+// ---- 资产导入导出（asset transfer）----
+export interface AssetImportOptions {
+  conflict: "fill" | "overwrite";
+  company_id?: number;
+  task_id?: number;
+  company_policy?: "exclude" | "keep";
+}
+
+export interface AssetImportSummary {
+  create: number;
+  fill: number;
+  overwrite: number;
+  unchanged: number;
+  conflict: number;
+  invalid: number;
+  total: number;
+}
+
+export interface AssetImportDiff {
+  field: string;
+  kind: "fill" | "change" | "add" | "remove" | "keep" | "mask";
+  old?: string;
+  new?: string;
+  note?: string;
+}
+
+export interface AssetImportPlanRow {
+  index: number;
+  row: {
+    sheet?: string;
+    line: number;
+    type: string;
+    domain?: string;
+    ip?: string;
+    url?: string;
+    app_name?: string;
+    bundle_id?: string;
+    method?: string;
+    port?: number;
+    service_name?: string;
+  };
+  action: "create" | "fill" | "overwrite" | "unchanged" | "conflict" | "invalid";
+  asset_id?: number;
+  diffs?: AssetImportDiff[];
+  shared_with_tasks?: number[];
+  reason?: string;
+}
+
+export interface AssetImportRowError {
+  sheet?: string;
+  line: number;
+  type?: string;
+  ref?: string;
+  field?: string;
+  reason: string;
+}
+
+export interface AssetImportPreviewResponse {
+  batch_id: number;
+  format: string;
+  file_sha256: string;
+  options: AssetImportOptions;
+  summary: AssetImportSummary;
+  plan_hash: string;
+  warnings?: { sheet?: string; detail: string }[];
+  rows_total: number;
+  expires_at: string;
+}
+
+export interface AssetImportBatchResponse {
+  batch_id: number;
+  status: "ready" | "committing" | "committed" | "expired" | "failed";
+  file_name: string;
+  file_format: string;
+  options: AssetImportOptions;
+  summary: AssetImportSummary;
+  plan_hash: string;
+  row_errors: AssetImportRowError[];
+  warnings?: { sheet?: string; detail: string }[];
+  rows: AssetImportPlanRow[];
+  rows_total: number;
+  offset: number;
+  limit: number;
+  receipt?: AssetImportReceipt;
+}
+
+export interface AssetImportReceipt {
+  batch_id: number;
+  committed_at: string;
+  summary: AssetImportSummary;
+  created_ids?: number[];
+  updated_ids?: number[];
+  attached: number;
+  existing_links: number;
+}
+
+export interface AssetExportRequest {
+  scope: "selected" | "filtered" | "all";
+  format: "xlsx" | "csv" | "json";
+  include_sensitive?: boolean;
+  ids?: number[];
+  filter?: { type?: string; company_id?: number; task_id?: number; dsl?: string };
 }

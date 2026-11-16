@@ -41,7 +41,7 @@ function humanSize(n?: number): string {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-export function UpdateCard() {
+export function UpdateCard({ expandAdvanced = false }: { expandAdvanced?: boolean }) {
   const { t, liveT } = useLiveTranslation();
   const [info, setInfo] = React.useState<UpdateCheck | null>(null);
   const [checking, setChecking] = React.useState(true);
@@ -235,8 +235,7 @@ export function UpdateCard() {
   const pct = downloading ? Math.max(progress?.percent ?? 0, 0) : 100;
 
   return (
-    // 设置页是多列瀑布流布局，卡片自己负责行间距并禁止跨列断开（见 page.tsx 的注释）。
-    <Card className="mb-4 break-inside-avoid md:mb-6">
+    <Card className="break-inside-avoid">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           <DownloadIcon className="size-4" />
@@ -245,43 +244,6 @@ export function UpdateCard() {
         <CardDescription>{t("settings.versionUpdatesHelp")}</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
-        <FieldGroup>
-          <Field data-invalid={!!networkError} data-disabled={busy || restarting || savingNetwork || !network}>
-            <FieldLabel htmlFor="update-proxy" className="text-sm font-normal text-muted-foreground">
-              {t("settings.updateProxy")}
-            </FieldLabel>
-            <div className="flex items-center gap-2">
-              <Input
-                id="update-proxy"
-                autoComplete="off"
-                placeholder={t("settings.proxyPlaceholder")}
-                value={network?.proxy ?? ""}
-                disabled={busy || restarting || savingNetwork || !network}
-                aria-invalid={!!networkError}
-                onChange={(e) =>
-                  network &&
-                  setNetwork({
-                    proxy: e.target.value,
-                  })
-                }
-              />
-              <Button
-                type="button"
-                onClick={() => void saveNetwork()}
-                disabled={!network || savingNetwork || checking || busy || restarting}
-              >
-                {savingNetwork ? t("settings.saving") : t("settings.save")}
-              </Button>
-            </div>
-            <FieldDescription className="text-xs">{t("settings.updateProxyHelp")}</FieldDescription>
-            {networkDirty && <p className="text-xs text-muted-foreground">{t("settings.unsavedUpdateNetwork")}</p>}
-            {networkError && (
-              <p role="alert" className="text-xs text-destructive">
-                {t(networkError.key, { message: localizedError(networkError.cause, t) })}
-              </p>
-            )}
-          </Field>
-        </FieldGroup>
         <div className="flex flex-wrap items-center gap-2 text-sm">
           <span className="text-muted-foreground">{t("settings.currentVersion")}</span>
           <Badge variant="secondary" className="font-mono">
@@ -407,32 +369,79 @@ export function UpdateCard() {
             <RefreshCwIcon className={checking ? "size-4 animate-spin" : "size-4"} />
             {t("settings.checkUpdates")}
           </Button>
-          <Button
-            size="sm"
-            onClick={doUpdate}
-            disabled={
-              checking ||
-              networkDirty ||
-              savingNetwork ||
-              !network ||
-              busy ||
-              restarting ||
-              !!info?.error ||
-              !info?.has_update ||
-              info?.asset_available === false
-            }
-          >
-            <DownloadIcon className="size-4" />
-            {info?.has_update ? t("settings.updateTo", { version: info.latest }) : t("settings.updateNow")}
-          </Button>
-          {info?.has_backup && (
-            <Button variant="ghost" size="sm" onClick={doRollback} disabled={busy || restarting}>
-              <RotateCcwIcon className="size-4" />
-              {t("settings.rollback")}
-            </Button>
-          )}
         </div>
 
+        {networkDirty && <p className="text-xs text-muted-foreground">{t("settings.unsavedUpdateNetwork")}</p>}
+        {networkError && (
+          <p role="alert" className="text-xs text-destructive">
+            {t(networkError.key, { message: localizedError(networkError.cause, t) })}
+          </p>
+        )}
+        <details
+          open={expandAdvanced || networkDirty || networkError ? true : undefined}
+          className="rounded-md border p-3"
+        >
+          <summary className="cursor-pointer text-sm font-medium">{t("settings.overview.updateAdvanced")}</summary>
+          <div className="mt-3 flex flex-col gap-4">
+            <FieldGroup>
+              <Field data-invalid={!!networkError} data-disabled={busy || restarting || savingNetwork || !network}>
+                <FieldLabel htmlFor="update-proxy" className="text-sm font-normal text-muted-foreground">
+                  {t("settings.updateProxy")}
+                </FieldLabel>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="update-proxy"
+                    autoComplete="off"
+                    placeholder={t("settings.proxyPlaceholder")}
+                    value={network?.proxy ?? ""}
+                    disabled={busy || restarting || savingNetwork || !network}
+                    aria-invalid={!!networkError}
+                    onChange={(e) =>
+                      network &&
+                      setNetwork({
+                        proxy: e.target.value,
+                      })
+                    }
+                  />
+                  <Button
+                    type="button"
+                    onClick={() => void saveNetwork()}
+                    disabled={!network || savingNetwork || checking || busy || restarting}
+                  >
+                    {savingNetwork ? t("settings.saving") : t("settings.save")}
+                  </Button>
+                </div>
+                <FieldDescription className="text-xs">{t("settings.updateProxyHelp")}</FieldDescription>
+              </Field>
+            </FieldGroup>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                onClick={doUpdate}
+                disabled={
+                  checking ||
+                  networkDirty ||
+                  savingNetwork ||
+                  !network ||
+                  busy ||
+                  restarting ||
+                  !!info?.error ||
+                  !info?.has_update ||
+                  info?.asset_available === false
+                }
+              >
+                <DownloadIcon className="size-4" />
+                {info?.has_update ? t("settings.updateTo", { version: info.latest }) : t("settings.updateNow")}
+              </Button>
+              {info?.has_backup && (
+                <Button variant="ghost" size="sm" onClick={doRollback} disabled={busy || restarting}>
+                  <RotateCcwIcon className="size-4" />
+                  {t("settings.rollback")}
+                </Button>
+              )}
+            </div>
+          </div>
+        </details>
         <p className="text-xs text-muted-foreground">
           {t("settings.restartScriptHelpStart")}
           <span className="font-mono">start.sh</span>

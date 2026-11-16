@@ -21,6 +21,7 @@ import { toast } from "sonner";
 
 import { HttpCodeBlock } from "@/components/http-code-block";
 import { LinkTrafficDialog } from "@/components/link-traffic-dialog";
+import { TrafficStorageUsage } from "@/components/traffic-storage-usage";
 import { requestFromTraffic } from "@/components/repeater/repeater-http";
 import { seedFromEvidence } from "@/components/repeater/repeater-store";
 import {
@@ -426,7 +427,7 @@ export function TrafficHistory({ taskId }: { taskId?: string }) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">{ui("screen.81a9d0b5a2a24f")}</h1>
           <p className="text-muted-foreground text-sm">
@@ -436,7 +437,8 @@ export function TrafficHistory({ taskId }: { taskId?: string }) {
             <p className="text-amber-600 text-xs dark:text-amber-400">{ui("screen.c7704b52416f68")}</p>
           ) : null}
         </div>
-        <div className="flex items-center gap-4 text-sm">
+        <div className="flex flex-wrap items-center justify-end gap-2 text-sm">
+          {!taskScoped && <TrafficStorageUsage reloadTick={reloadTick} />}
           <span
             className={cn(
               "inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs font-medium",

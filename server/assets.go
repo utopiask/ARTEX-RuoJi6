@@ -357,6 +357,14 @@ func (s *Server) listAssets(w http.ResponseWriter, r *http.Request) {
 		companyID, _ := strconv.ParseInt(q.Get("company_id"), 10, 64)
 		taskID, _ := strconv.ParseInt(q.Get("task_id"), 10, 64)
 		switch {
+		case companyID > 0 && taskID > 0:
+			// 组合筛选走共享构造器：company+task+type 全部 AND 组合，与导出一致
+			// （历史实现里 company 会吞掉 task，见 §10.1 一致性修复）。
+			filter := db.AssetFilter{Type: typ, CompanyID: companyID, TaskID: taskID}
+			total, err = as.CountAssetsFiltered(filter)
+			if err == nil && offset < total {
+				assets, err = as.QueryAssetsFiltered(filter, limit, offset)
+			}
 		case companyID > 0:
 			total, err = as.CountByCompany(companyID, typ)
 			if err == nil && offset < total {

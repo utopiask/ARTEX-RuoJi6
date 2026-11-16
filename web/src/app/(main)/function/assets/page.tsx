@@ -7,6 +7,7 @@ import {
   BuildingIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  DownloadIcon,
   GlobeIcon,
   KeyRoundIcon,
   LayoutTemplateIcon,
@@ -16,10 +17,12 @@ import {
   RefreshCwIcon,
   SmartphoneIcon,
   Trash2Icon,
+  UploadIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 
 import { AssetDslSearch } from "@/components/asset-dsl-search";
+import { AssetExportDialog, AssetImportDialog } from "@/components/asset-transfer";
 import { IntelligencePanel } from "@/components/intelligence-panel";
 import { ScopeTextEditor } from "@/components/scope-text-editor";
 import {
@@ -158,6 +161,10 @@ function AssetsContent() {
   const [refreshKey, setRefreshKey] = React.useState(0);
   const assetsRequestRef = React.useRef(0);
   const [rowsTab, setRowsTab] = React.useState("");
+
+  // asset import / export
+  const [importOpen, setImportOpen] = React.useState(false);
+  const [exportOpen, setExportOpen] = React.useState(false);
 
   // asset selection & delete
   const [selected, setSelected] = React.useState<Set<number>>(new Set());
@@ -405,10 +412,26 @@ function AssetsContent() {
               {selected.size})
             </Button>
           )}
+          <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}>
+            <UploadIcon className="size-3.5" /> {ui("assetTransfer.import")}
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setExportOpen(true)}>
+            <DownloadIcon className="size-3.5" /> {ui("assetTransfer.export")}
+          </Button>
           <Button variant="outline" size="sm" onClick={refresh} disabled={loading}>
             <RefreshCwIcon className={cn("size-4", loading && "animate-spin")} /> {ui("screen.aee88743413144")}
           </Button>
           <CompanyDialog onSaved={refresh} />
+          <AssetImportDialog open={importOpen} onOpenChange={setImportOpen} onImported={refresh} />
+          <AssetExportDialog
+            open={exportOpen}
+            onOpenChange={setExportOpen}
+            selectedIds={Array.from(selected)}
+            filter={{
+              type: tab === "company" ? undefined : tab,
+              dsl: query || undefined,
+            }}
+          />
         </div>
       </div>
 

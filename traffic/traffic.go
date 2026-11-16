@@ -135,12 +135,13 @@ const TrafficSearchDescription = "查询记录代理已抓取的目标流量（�
 
 // Traffic runs the recording proxy and owns the file tree + index.
 type Traffic struct {
-	dir   string
-	addr  string
-	db    *sql.DB
-	wmu   sync.Mutex // serializes record() vs DeleteHost (incl. blob GC)
-	seq   atomic.Int64
-	proxy *mproxy.Proxy
+	storage storageCache
+	dir     string
+	addr    string
+	db      *sql.DB
+	wmu     sync.Mutex // serializes record() vs DeleteHost (incl. blob GC)
+	seq     atomic.Int64
+	proxy   *mproxy.Proxy
 	// fts reports whether the full-text index is available. False on a driver
 	// build without FTS5: recording and metadata search still work, body search
 	// degrades to unsupported rather than erroring.
@@ -387,9 +388,11 @@ func (t *Traffic) Start() error { return t.proxy.Start() }
 // it holds a whole minutes-long budget, and finishing it is never worth delaying
 // shutdown for — the next deletion resumes it.
 func (t *Traffic) Close() error {
+	t.storage.mu.Lock()
 	if t.closed != nil {
 		t.closeOnce.Do(func() { close(t.closed) })
 	}
+	t.storage.mu.Unlock()
 	t.reaping.Wait()
 	return t.db.Close()
 }
@@ -1165,6 +1168,7 @@ func (t *Traffic) DeleteHost(host string) (int64, error) {
 	if err := tx.Commit(); err != nil {
 		return 0, errors.Join(fmt.Errorf("提交流量索引删除: %w", err), restoreTrees(stageDir, moves))
 	}
+	t.invalidateStorage()
 	t.reapStage(stageDir)
 	if n > 0 {
 		t.reclaim()
@@ -1214,6 +1218,7 @@ func (t *Traffic) DeleteAll() (deleted int64, reclaimed int64, err error) {
 	if err := tx.Commit(); err != nil {
 		return 0, 0, errors.Join(fmt.Errorf("提交流量索引删除: %w", err), restoreTrees(stageDir, moves))
 	}
+	t.invalidateStorage()
 	t.reapStage(stageDir)
 	if err := t.gcBlobs(); err != nil {
 		return deleted, 0, err
@@ -1253,6 +1258,7 @@ func (t *Traffic) allHostTrees() ([]string, error) {
 // takes effect through the VACUUM that follows it, and both must run on the same
 // connection. Callers must hold wmu.
 func (t *Traffic) compactIndex() error {
+	defer t.invalidateStorage()
 	ctx := context.Background()
 	conn, err := t.db.Conn(ctx)
 	if err != nil {
@@ -1468,6 +1474,7 @@ func (t *Traffic) reapStage(stageDir string) {
 		return
 	}
 	t.reaping.Go(func() {
+		defer t.invalidateStorage()
 		if err := os.RemoveAll(stageDir); err != nil {
 			log.Printf("[traffic] 清理历史流量目录 %s 失败：%v", stageDir, err)
 		}
@@ -1770,6 +1777,7 @@ func (s *HostDeleteStage) Commit() error {
 	// Unlinking the staged trees is what used to hold the write lock for hours;
 	// it now runs in the background, while collection below only needs them to be
 	// out of the live tree — which the staging rename already guaranteed.
+	s.traffic.invalidateStorage()
 	s.traffic.reapStage(s.stageDir)
 	s.traffic.reclaim()
 	var errs []error
@@ -1815,6 +1823,7 @@ func (t *Traffic) reclaim() {
 		return // one pass at a time; a second would only contend for the lock
 	}
 	t.reaping.Go(func() {
+		defer t.invalidateStorage()
 		defer t.reclaiming.Store(false)
 		// One pinned connection for the whole pass: a long reclamation issues
 		// hundreds of statements, and letting the pool hand each one a different
@@ -1910,6 +1919,7 @@ func (t *Traffic) reclaimChunk(ctx context.Context, conn *sql.Conn, merges *int)
 // affected entries. Callers must hold wmu so this never races a concurrent
 // record() writing a fresh blob + reference.
 func (t *Traffic) gcBlobs() error {
+	defer t.invalidateStorage()
 	refs := make(map[string]struct{})
 	rows, err := t.db.Query(`SELECT DISTINCT hash FROM blob_refs`)
 	if err != nil {

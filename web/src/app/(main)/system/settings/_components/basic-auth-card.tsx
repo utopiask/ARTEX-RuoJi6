@@ -14,7 +14,7 @@ import { localizedError } from "@/i18n/errors";
 import { useLiveTranslation } from "@/i18n/use-live-translation";
 import { api } from "@/lib/api";
 
-export function BasicAuthCard() {
+export function BasicAuthCard({ expandAdvanced = false }: { expandAdvanced?: boolean }) {
   const { t } = useLiveTranslation();
   const [enabled, setEnabled] = useState(false);
   const [username, setUsername] = useState("");
@@ -60,7 +60,7 @@ export function BasicAuthCard() {
   };
 
   return (
-    <Card className="mb-4 break-inside-avoid md:mb-6">
+    <Card className="break-inside-avoid">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <ShieldCheckIcon className="size-4" />
@@ -68,7 +68,13 @@ export function BasicAuthCard() {
         </CardTitle>
         <CardDescription>{t("settings.basicAuthHelp")}</CardDescription>
       </CardHeader>
-      <form onSubmit={save}>
+      <form
+        onSubmit={save}
+        onInvalidCapture={(event) => {
+          const details = event.currentTarget.querySelector("details");
+          if (details) details.open = true;
+        }}
+      >
         <CardContent>
           <FieldGroup>
             <Field orientation="horizontal">
@@ -80,35 +86,45 @@ export function BasicAuthCard() {
                 disabled={!loaded || saving}
               />
             </Field>
-            <Field>
-              <FieldLabel htmlFor="basic-auth-username">{t("settings.basicAuthUsername")}</FieldLabel>
-              <Input
-                id="basic-auth-username"
-                autoComplete="off"
-                value={username}
-                required={enabled}
-                disabled={!loaded || saving}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder={t("settings.basicAuthUsernamePlaceholder")}
-              />
-              <FieldDescription>{t("settings.basicAuthUsernameHelp")}</FieldDescription>
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="basic-auth-password">{t("settings.basicAuthPassword")}</FieldLabel>
-              <Input
-                id="basic-auth-password"
-                type="password"
-                autoComplete="new-password"
-                value={password}
-                required={enabled && !passwordSet}
-                disabled={!loaded || saving}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder={passwordSet ? t("settings.keepPassword") : t("settings.basicAuthPasswordPlaceholder")}
-              />
-              <FieldDescription>{t("settings.basicAuthPasswordHelp")}</FieldDescription>
-            </Field>
-            <FieldDescription>{t("settings.basicAuthSessionHelp")}</FieldDescription>
-            <FieldDescription>{t("settings.basicAuthMcpNote")}</FieldDescription>
+            <details
+              open={expandAdvanced || (enabled && (!username.trim() || (!passwordSet && !password))) ? true : undefined}
+              className="rounded-md border p-3"
+            >
+              <summary className="cursor-pointer text-sm font-medium">
+                {t("settings.overview.basicCredentials")}
+              </summary>
+              <FieldGroup className="mt-3">
+                <Field>
+                  <FieldLabel htmlFor="basic-auth-username">{t("settings.basicAuthUsername")}</FieldLabel>
+                  <Input
+                    id="basic-auth-username"
+                    autoComplete="off"
+                    value={username}
+                    required={enabled}
+                    disabled={!loaded || saving}
+                    onChange={(e) => setUsername(e.target.value)}
+                    placeholder={t("settings.basicAuthUsernamePlaceholder")}
+                  />
+                  <FieldDescription>{t("settings.basicAuthUsernameHelp")}</FieldDescription>
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="basic-auth-password">{t("settings.basicAuthPassword")}</FieldLabel>
+                  <Input
+                    id="basic-auth-password"
+                    type="password"
+                    autoComplete="new-password"
+                    value={password}
+                    required={enabled && !passwordSet}
+                    disabled={!loaded || saving}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder={passwordSet ? t("settings.keepPassword") : t("settings.basicAuthPasswordPlaceholder")}
+                  />
+                  <FieldDescription>{t("settings.basicAuthPasswordHelp")}</FieldDescription>
+                </Field>
+                <FieldDescription>{t("settings.basicAuthSessionHelp")}</FieldDescription>
+                <FieldDescription>{t("settings.basicAuthMcpNote")}</FieldDescription>
+              </FieldGroup>
+            </details>
             {error ? (
               <p role="alert" className="text-destructive text-sm">
                 {t(error.key, { message: localizedError(error.cause, t) })}

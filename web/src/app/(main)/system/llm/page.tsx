@@ -2,6 +2,7 @@
 import * as React from "react";
 
 import {
+  CopyPlusIcon,
   Loader2Icon,
   PlugZapIcon,
   PlusIcon,
@@ -798,6 +799,8 @@ export default function LLMPage() {
   // 「编辑 X」闪成「新建」。editing = null 表示新建。
   const [editOpen, setEditOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<LLMProfile | null>(null);
+  const [copying, setCopying] = React.useState<Set<string>>(() => new Set());
+  const copyingRef = React.useRef(new Set<string>());
   const openEditor = React.useCallback((p: LLMProfile | null) => {
     setEditing(p);
     setEditOpen(true);
@@ -812,12 +815,16 @@ export default function LLMPage() {
   }, []);
 
   const load = React.useCallback(async () => {
+    let refreshed = false;
     try {
       setProfiles(await api.llmProfiles());
+      refreshed = true;
     } catch {
-      /* ignore */
+      // Keep the last visible list; creation callers must distinguish a failed
+      // refresh from a failed mutation so users do not create another copy.
     }
     await loadPool();
+    return refreshed;
   }, [loadPool]);
 
   React.useEffect(() => {
@@ -832,6 +839,7 @@ export default function LLMPage() {
   }, [pool]);
 
   async function activate(id: string, name: string) {
+    if (copyingRef.current.has(id)) return;
     try {
       await api.activateLLMProfile(id);
       toast.success(ui("screen.9656bea09ffebb", { v0: name }));
@@ -841,7 +849,31 @@ export default function LLMPage() {
     }
   }
 
+  async function duplicate(p: LLMProfile) {
+    if (copyingRef.current.has(p.id)) return;
+    copyingRef.current.add(p.id);
+    setCopying((current) => new Set(current).add(p.id));
+    try {
+      const created = await api.duplicateLLMProfile(p.id);
+      if (await load()) {
+        toast.success(ui("llmProfile.copied", { name: created.name }));
+      } else {
+        toast.warning(ui("llmProfile.copyRefreshFailed", { name: created.name }));
+      }
+    } catch (e) {
+      toast.error(ui("llmProfile.copyFailed", { message: (e as Error).message }));
+    } finally {
+      copyingRef.current.delete(p.id);
+      setCopying((current) => {
+        const next = new Set(current);
+        next.delete(p.id);
+        return next;
+      });
+    }
+  }
+
   async function remove(p: LLMProfile) {
+    if (copyingRef.current.has(p.id)) return;
     if (p.is_default) {
       toast.error(ui("screen.0ff5af7ae5d53c"));
       return;
@@ -897,6 +929,7 @@ export default function LLMPage() {
                   tabIndex={0}
                   onClick={() => openEditor(p)}
                   onKeyDown={(e) => {
+                    if (e.target !== e.currentTarget) return;
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();
                       openEditor(p);
@@ -964,7 +997,7 @@ export default function LLMPage() {
                         size="sm"
                         variant="outline"
                         className="flex-1"
-                        disabled={p.is_default || p.format === "jev"}
+                        disabled={p.is_default || p.format === "jev" || copying.has(p.id)}
                         onClick={(e) => {
                           e.stopPropagation();
                           void activate(p.id, p.name);
@@ -979,6 +1012,20 @@ export default function LLMPage() {
                       <Button
                         size="icon"
                         variant="outline"
+                        disabled={copying.has(p.id)}
+                        aria-label={ui(copying.has(p.id) ? "llmProfile.copying" : "llmProfile.copy")}
+                        title={ui("llmProfile.copyHelp")}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void duplicate(p);
+                        }}
+                      >
+                        {copying.has(p.id) ? <Loader2Icon className="animate-spin" /> : <CopyPlusIcon />}
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="outline"
+                        disabled={copying.has(p.id)}
                         aria-label={ui("screen.49b82b04bd1a7d")}
                         onClick={(e) => {
                           e.stopPropagation();

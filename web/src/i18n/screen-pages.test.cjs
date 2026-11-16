@@ -47,7 +47,10 @@ function load(inputFile) {
           ? load(base + "/src/" + id.slice(2))
           : id.startsWith(".")
             ? load(path.resolve(path.dirname(file), id))
-            : id === "react" && file.endsWith("/components/intelligence-panel.tsx")
+            : id === "react" &&
+                (file.endsWith("/components/intelligence-panel.tsx") ||
+                  file.endsWith("/system/settings/_components/basic-auth-card.tsx") ||
+                  file.endsWith("/system/llm/page.tsx"))
               ? {
                   ...React,
                   useState(initial) {
@@ -335,6 +338,99 @@ test("every fixed UI key resolves and English resources contain no untranslated 
       };
       walk(tree);
     }
+});
+
+test("populated LLM cards expose translated copy actions for active and judge profiles", async () => {
+  const file = base + "/src/app/(main)/system/llm/page.tsx";
+  const Page = load(file).default;
+  const profiles = [
+    { id: "7", name: "Synthetic source", format: "openai", model: "fixture-model", api_key_hint: "…test", rate_per_second: 0, rate_per_minute: 0, streaming: false, is_default: true },
+    { id: "8", name: "Synthetic judge", format: "jev", model: "fixture-judge", api_key_hint: "…test", rate_per_second: 0, rate_per_minute: 0, is_default: false },
+  ];
+  try {
+    for (const [locale, label] of [["en", "Copy configuration"], ["zh-CN", "复制配置"]]) {
+      await i18n.changeLanguage(locale);
+      stateSnapshots.set(file, { next: 0, values: new Map([[0, profiles]]) });
+      const markup = render(Page);
+      assert.equal(markup.split('aria-label="' + label + '"').length - 1, 2);
+      assert.match(markup, /Synthetic source/);
+      assert.match(markup, /Synthetic judge/);
+      if (locale === "en") assert.doesNotMatch(visible(markup), /[\p{Script=Han}]/u);
+    }
+  } finally {
+    stateSnapshots.delete(file);
+  }
+});
+
+test("settings overview exposes all fifteen cards and uses scroll-only group links", async () => {
+  await i18n.changeLanguage("en");
+  const Page = load(base + "/src/app/(main)/system/settings/page.tsx").default;
+  const markup = render(Page);
+  const cards = [...markup.matchAll(/<div\b[^>]*data-settings-card="([^"]+)"[^>]*>/g)];
+  assert.deepEqual(cards.map((m) => m[1]), [
+    "traffic-capture", "traffic-binding", "browser-security", "global-proxy",
+    "constraints", "intelligence", "workers", "noa",
+    "web-search", "python", "auto-titles", "chat-send",
+    "basic-auth", "update", "mcp-server",
+  ]);
+  assert.ok(cards.every((m) => !/\shidden(?:=|\s|>)/.test(m[0])));
+  assert.equal([...markup.matchAll(/href="#settings-group-/g)].length, 4);
+  assert.doesNotMatch(markup, /aria-label="System settings categories"/);
+  assert.match(markup, /data-settings-density="compact"/);
+  assert.match(markup, /Configuration cards: 15/);
+});
+
+test("settings search matches either language while retaining hidden form controls", async () => {
+  await i18n.changeLanguage("en");
+  const { SettingsOverview } = load(base + "/src/app/(main)/system/settings/_components/settings-overview.tsx");
+  const groups = [
+    { id: "traffic", titleKey: "settings.overview.group.traffic", descriptionKey: "settings.overview.hint.traffic", cards: [
+      { id: "capture", keywords: "settings.keywords.trafficCapture", content: React.createElement("input", { defaultValue: "capture-draft" }) },
+      { id: "proxy", keywords: "settings.keywords.globalProxy", content: React.createElement("input", { defaultValue: "proxy-draft" }) },
+    ] },
+    { id: "access", titleKey: "settings.overview.group.access", descriptionKey: "settings.overview.hint.access", cards: [
+      { id: "mcp", keywords: "settings.keywords.mcpServer", content: React.createElement("input", { defaultValue: "mcp-draft" }) },
+    ] },
+  ];
+  const run = (query) => {
+    const markup = render(SettingsOverview, { groups, query, onQueryChange: noop });
+    const slots = [...markup.matchAll(/<div\b[^>]*data-settings-card="([^"]+)"[^>]*>/g)];
+    return { markup, visible: slots.filter((m) => !/\shidden(?:=|\s|>)/.test(m[0])).map((m) => m[1]) };
+  };
+  assert.deepEqual(run("").visible, ["capture", "proxy", "mcp"]);
+  assert.deepEqual(run("代理").visible, ["capture", "proxy"]);
+  assert.deepEqual(run("proxy").visible, ["capture", "proxy"]);
+  assert.deepEqual(run("白名单").visible, ["mcp"]);
+  const missing = run("no-such-setting-xyz");
+  assert.deepEqual(missing.visible, []);
+  assert.match(missing.markup, /No matching settings/);
+  assert.match(missing.markup, /value="proxy-draft"/);
+  assert.deepEqual(run("").visible, ["capture", "proxy", "mcp"]);
+});
+
+test("Basic Auth advanced fields reveal required inputs and support search expansion", async () => {
+  await i18n.changeLanguage("en");
+  const file = base + "/src/app/(main)/system/settings/_components/basic-auth-card.tsx";
+  const { BasicAuthCard } = load(file);
+  const cases = [
+    { enabled: false, username: "", passwordSet: false, props: {}, open: false },
+    { enabled: true, username: "", passwordSet: false, props: {}, open: true },
+    { enabled: true, username: "test-user", passwordSet: true, props: {}, open: false },
+    { enabled: false, username: "", passwordSet: false, props: { expandAdvanced: true }, open: true },
+  ];
+  try {
+    for (const c of cases) {
+      stateSnapshots.set(file, { next: 0, values: new Map([[0, c.enabled], [1, c.username], [2, ""], [3, c.passwordSet], [4, true]]) });
+      const markup = render(BasicAuthCard, c.props);
+      assert.equal(/<details\b[^>]*\bopen=/.test(markup), c.open, JSON.stringify(c));
+      if (c.enabled && !c.passwordSet) {
+        assert.match(markup, /<input[^>]*id="basic-auth-username"[^>]*required=""/);
+        assert.match(markup, /<input[^>]*id="basic-auth-password"[^>]*required=""/);
+      }
+    }
+  } finally {
+    stateSnapshots.delete(file);
+  }
 });
 
 test("Repeater renders persisted drafts with translated default group and preserves raw packets", async () => {

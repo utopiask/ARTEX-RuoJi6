@@ -22,6 +22,7 @@ import type {
   FindingTraffic,
   FindingTrafficBinding,
   IntentAsset,
+  LLMProfile,
   ScopeRow,
   Task,
   TaskArchive,
@@ -50,6 +51,30 @@ const mockInterceptDetails = structuredClone(D.interceptDetails);
 const mockTasks = structuredClone(D.tasks);
 const mockFindings = structuredClone(D.findings);
 const mockLLMRecords = structuredClone(D.llmRecords);
+const mockLLMProfiles = structuredClone(D.llmProfiles);
+let nextMockLLMProfileID = mockLLMProfiles.reduce((max, profile) => Math.max(max, Number(profile.id)), 0) + 1;
+
+function mockLLMProfileID(value: unknown): number {
+  const text = String(value ?? "");
+  const id = Number(text);
+  if (!/^\d+$/.test(text) || !Number.isSafeInteger(id) || id <= 0) {
+    throw new Error("LLM 配置 ID 无效");
+  }
+  return id;
+}
+
+function nextMockLLMProfileName(name: string): string {
+  let stem = name.trim() || "LLM";
+  let suffix = BigInt(2);
+  const match = /^(.*)-([0-9]+)$/.exec(stem);
+  if (match?.[1].trim() && BigInt(match[2]) > BigInt(0)) {
+    stem = match[1].trim();
+    suffix = BigInt(match[2]) + BigInt(1);
+  }
+  const taken = new Set(mockLLMProfiles.map((profile) => profile.name));
+  while (taken.has(`${stem}-${suffix}`)) suffix++;
+  return `${stem}-${suffix}`;
+}
 const mockTaskTemplates = structuredClone(D.taskTemplates);
 const mockTaskCategories = structuredClone(D.taskCategories);
 const mockConversations = structuredClone(D.conversations);
@@ -809,7 +834,7 @@ function mockScopeRows(
 }
 
 function mockProfileResolution(profileID: number | undefined, source: TaskLLMResolution["source"]): TaskLLMResolution {
-  const profile = D.llmProfiles.find((item) => Number(item.id) === profileID);
+  const profile = mockLLMProfiles.find((item) => Number(item.id) === profileID);
   if (!profile) {
     return { name: "", format: "", model: "", source, available: false, reason: "LLM 配置不存在" };
   }
@@ -845,7 +870,7 @@ function mockRoleResolution(task: Task, agentKey: "mainagent" | "planner" | "wor
     }
     return mockProfileResolution(task.active_llm_profile_id, "task_chain");
   }
-  const globalProfile = D.llmProfiles.find((item) => item.is_default);
+  const globalProfile = mockLLMProfiles.find((item) => item.is_default);
   if (globalProfile) return mockProfileResolution(Number(globalProfile.id), "global_profile");
   return {
     name: "全局配置",
@@ -1826,6 +1851,67 @@ function route(m: string, path: string, seg: string[], q: URLSearchParams, b: Re
 
   // ── assets ──
   if (path === "/assets/counts") return mockAssetCounts(q.get("task_id"));
+  // 资产导入导出（演示模式）：预览/批次/提交/补全返回合成结果；文件下载由
+  // api 层的 MOCK 分支直接生成示例文件。
+  if (path === "/assets/imports/preview" && m === "POST") {
+    return {
+      batch_id: 1,
+      format: "txt",
+      file_sha256: "demo",
+      options: { conflict: "fill" },
+      summary: { create: 2, fill: 0, overwrite: 0, unchanged: 0, conflict: 0, invalid: 0, total: 2 },
+      plan_hash: "demo-hash",
+      warnings: [],
+      rows_total: 2,
+      expires_at: new Date(Date.now() + 30 * 60_000).toISOString(),
+    };
+  }
+  if (seg[0] === "assets" && seg[1] === "imports" && seg[2] === "batch" && seg.length >= 4) {
+    const id = Number(seg[3]);
+    if (seg[4] === "commit" && m === "POST") {
+      return {
+        receipt: {
+          batch_id: id,
+          committed_at: new Date().toISOString(),
+          summary: { create: 2, fill: 0, overwrite: 0, unchanged: 0, conflict: 0, invalid: 0, total: 2 },
+          attached: 0,
+          existing_links: 0,
+        },
+      };
+    }
+    if (seg[4] === "probe" && m === "POST") {
+      return { queued: 0, not_queued: 0, skipped: 2, note: "演示模式不执行真实探测" };
+    }
+    if (m === "GET") {
+      const action = q.get("action") ?? "";
+      const rows = [
+        {
+          index: 0,
+          row: { sheet: "粘贴", line: 1, type: "root_domain", domain: "demo.example.test" },
+          action: "create",
+        },
+        { index: 1, row: { sheet: "粘贴", line: 2, type: "ip", ip: "203.0.113.99" }, action: "create" },
+      ].filter((r) => !action || r.action === action);
+      return {
+        batch_id: id,
+        status: "ready",
+        file_name: "demo",
+        file_format: "txt",
+        options: { conflict: "fill" },
+        summary: { create: 2, fill: 0, overwrite: 0, unchanged: 0, conflict: 0, invalid: 0, total: 2 },
+        plan_hash: "demo-hash",
+        row_errors: [],
+        warnings: [],
+        rows,
+        rows_total: rows.length,
+        offset: 0,
+        limit: 100,
+      };
+    }
+  }
+  if (path === "/assets/export" && m === "POST") {
+    return { ok: true };
+  }
   if (path === "/assets" && m === "GET") {
     const type = q.get("type") ?? "";
     const taskID = q.get("task_id");
@@ -2551,14 +2637,81 @@ function route(m: string, path: string, seg: string[], q: URLSearchParams, b: Re
   if (path === "/llm" && m === "POST") return { ok: true };
   if (path === "/llm/test")
     return { ok: true, latency_ms: 128, model: String(b.model ?? "claude-opus-4-8"), reply: "OK" };
-  if (path === "/llm/profiles" && m === "GET") return { profiles: D.llmProfiles };
-  if (path === "/llm/profiles" && m === "POST") return { id: Number(b.id) || 3 };
-  if (path === "/llm/profiles/active") return { ok: true };
+  if (path === "/llm/profiles" && m === "GET") return { profiles: structuredClone(mockLLMProfiles) };
+  if (path === "/llm/profiles" && m === "POST") {
+    const id = b.id === undefined || b.id === 0 ? undefined : mockLLMProfileID(b.id);
+    const existing = id === undefined ? undefined : mockLLMProfiles.find((profile) => Number(profile.id) === id);
+    if (id !== undefined && !existing) throw new Error("LLM 配置不存在");
+    const profile: LLMProfile = existing
+      ? structuredClone(existing)
+      : {
+          id: String(nextMockLLMProfileID),
+          name: "",
+          format: "openai",
+          model: "",
+          rate_per_second: 0,
+          rate_per_minute: 0,
+          is_default: false,
+        };
+    // Keep only public DTO fields. API keys are never retained in preview state.
+    const fields = [
+      "name",
+      "format",
+      "model",
+      "base_url",
+      "proxy",
+      "rate_per_second",
+      "rate_per_minute",
+      "context_window_k",
+      "thinking_type",
+      "reasoning_effort",
+      "priority",
+      "pool_exclude",
+      "streaming",
+      "max_tokens",
+      "max_tokens_field",
+      "session_header_key",
+      "retry",
+    ] as const;
+    for (const field of fields) {
+      if (Object.hasOwn(b, field)) Object.assign(profile, { [field]: structuredClone(b[field]) });
+    }
+    if (typeof b.api_key === "string" && b.api_key.trim()) profile.api_key_hint = "…mock";
+    if (existing) mockLLMProfiles[mockLLMProfiles.indexOf(existing)] = profile;
+    else {
+      mockLLMProfiles.push(profile);
+      nextMockLLMProfileID++;
+    }
+    return { id: Number(profile.id) };
+  }
+  if (path === "/llm/profiles/active" && m === "POST") {
+    const id = mockLLMProfileID(b.id);
+    if (!mockLLMProfiles.some((profile) => Number(profile.id) === id)) throw new Error("LLM 配置不存在");
+    for (const profile of mockLLMProfiles) profile.is_default = Number(profile.id) === id;
+    return { ok: true };
+  }
+  const duplicateProfile = /^\/llm\/profiles\/([^/]*)\/duplicate$/.exec(path);
+  if (duplicateProfile && m === "POST") {
+    const id = mockLLMProfileID(duplicateProfile[1]);
+    const source = mockLLMProfiles.find((profile) => Number(profile.id) === id);
+    if (!source) throw new Error("LLM 配置不存在");
+    const profile = structuredClone(source);
+    profile.id = String(nextMockLLMProfileID++);
+    profile.name = nextMockLLMProfileName(source.name);
+    profile.is_default = false;
+    mockLLMProfiles.push(profile);
+    return { id: Number(profile.id), name: profile.name };
+  }
   if (path === "/llm/pool" && m === "GET") return D.llmPool;
   if (path === "/llm/pool/reset")
     return { ...D.llmPool, chain: D.llmPool.chain.map((c) => ({ ...c, state: "ok", fails: 0, cooldown_secs: 0 })) };
-  if (seg[0] === "llm" && seg[1] === "profiles" && seg.length === 3 && m === "DELETE")
-    return { deleted: Number(seg[2]) };
+  if (seg[0] === "llm" && seg[1] === "profiles" && seg.length === 3 && m === "DELETE") {
+    const id = mockLLMProfileID(seg[2]);
+    const index = mockLLMProfiles.findIndex((profile) => Number(profile.id) === id);
+    if (index < 0) throw new Error("LLM 配置不存在");
+    mockLLMProfiles.splice(index, 1);
+    return { deleted: id };
+  }
 
   // ── agents ──
   if (path === "/agents" && m === "GET") return { agents: D.agents };

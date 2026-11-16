@@ -147,6 +147,31 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_sv2_value ON company_scope(company_id, kind
 CREATE INDEX IF NOT EXISTS idx_sv2_icp ON company_scope(value) WHERE kind = 'icp';
 CREATE INDEX IF NOT EXISTS idx_sv2_company ON company_scope(company_id);
 
+-- 资产导入批次（资产导入导出实施方案 §9.3）：轻量批次状态机，不引入通用工作流。
+-- rows 保存解析后的规范化行直至提交/过期（提交后清空原始内容，保留统计回执；
+-- 回执不含明文认证）。options 保存合并策略/归属选项；plan_hash 绑定预览与提交。
+CREATE TABLE IF NOT EXISTS asset_import_batches (
+    id           BIGSERIAL PRIMARY KEY,
+    status       TEXT NOT NULL DEFAULT 'ready'
+                   CHECK (status IN ('ready','committing','committed','expired','failed')),
+    file_name    TEXT NOT NULL DEFAULT '',
+    file_format  TEXT NOT NULL DEFAULT '',
+    file_sha256  TEXT NOT NULL DEFAULT '',
+    options      JSONB NOT NULL DEFAULT '{}',
+    rows         JSONB NOT NULL DEFAULT '[]',
+    row_errors   JSONB NOT NULL DEFAULT '[]',
+    warnings     JSONB NOT NULL DEFAULT '[]',
+    plan_hash    TEXT NOT NULL DEFAULT '',
+    plan         JSONB NOT NULL DEFAULT '{}',
+    summary      JSONB NOT NULL DEFAULT '{}',
+    receipt      JSONB,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    expires_at   TIMESTAMPTZ NOT NULL DEFAULT now() + interval '30 minutes',
+    committed_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_asset_import_batches_expiry ON asset_import_batches(expires_at) WHERE status = 'ready';
+CREATE INDEX IF NOT EXISTS idx_asset_import_batches_committed ON asset_import_batches(committed_at DESC) WHERE status = 'committed';
+
 -- =====================================================================
 -- B. 推理探索层
 -- =====================================================================

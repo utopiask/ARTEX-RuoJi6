@@ -281,6 +281,8 @@ func New(ctx context.Context, m *Manager, skillDir string, dataDir string, keyDi
 		// 漏洞 IM 推送投递引擎。与 Scheduler 并列但独立：推送的实时性要求(3s)
 		// 与触发器的业务节奏不同，且两者失败互不牵连——推送卡住不该影响 agent 触发。
 		go newNotifier(s).Run(s.ctx)
+		s.proxyPoolWG.Add(1)
+		go func() { defer s.proxyPoolWG.Done(); s.runAssetImportCleanup(s.ctx) }()
 		// Fill the tool cache for any enabled MCP that has none yet (notably the
 		// seeded browser MCP on first run). Async so it never blocks startup.
 		go s.discoverEmptyMCPsOnStartup()
@@ -322,7 +324,7 @@ func New(ctx context.Context, m *Manager, skillDir string, dataDir string, keyDi
 	return s
 }
 
-// Close waits for proxy pool supervision to stop before Manager closes the DB.
+// Close waits for proxy supervision and import maintenance before the DB closes.
 func (s *Server) Close() {
 	if s != nil {
 		s.proxyPoolWG.Wait()
@@ -922,6 +924,17 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/assets/counts", s.assetCounts)
 	mux.HandleFunc("POST /api/assets", s.insertAssets)
 	mux.HandleFunc("DELETE /api/assets", s.deleteAssets)
+	// 资产导入导出（asset_transfer）：模板/预览/提交/错误清单/补全排队/导出
+	mux.HandleFunc("GET /api/assets/import-template", s.assetImportTemplate)
+	mux.HandleFunc("POST /api/assets/imports/preview", s.assetImportPreview)
+	// 注：带 {id} 的导入路由放在 imports/batch/ 前缀下。直接用 /api/assets/imports/{id}
+	// 会与既有 /api/assets/{id}/intelligence 在 "imports/intelligence" 路径上形成
+	// ServeMux 二义冲突（字面量段对通配段），注册期即 panic。
+	mux.HandleFunc("GET /api/assets/imports/batch/{id}", s.assetImportGet)
+	mux.HandleFunc("POST /api/assets/imports/batch/{id}/commit", s.assetImportCommit)
+	mux.HandleFunc("GET /api/assets/imports/batch/{id}/errors", s.assetImportErrors)
+	mux.HandleFunc("POST /api/assets/imports/batch/{id}/probe", s.assetImportProbe)
+	mux.HandleFunc("POST /api/assets/export", s.assetExport)
 
 	// company system
 	mux.HandleFunc("GET /api/companies", s.listCompanies)
@@ -975,6 +988,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/audit", s.getAudit)
 	mux.HandleFunc("POST /api/gc", s.gc)
 	mux.HandleFunc("GET /api/traffic", s.getTraffic)
+	mux.HandleFunc("GET /api/traffic/storage", s.getTrafficStorage)
 	mux.HandleFunc("GET /api/traffic/hosts", s.getTrafficHosts)
 	mux.HandleFunc("DELETE /api/traffic", s.deleteTraffic)
 	mux.HandleFunc("DELETE /api/traffic/hosts", s.deleteTrafficHosts)
@@ -1123,6 +1137,7 @@ func (s *Server) Handler() http.Handler {
 	// LLM 多 profile
 	mux.HandleFunc("GET /api/llm/profiles", s.pgListProfiles)
 	mux.HandleFunc("POST /api/llm/profiles", s.pgSaveProfile)
+	mux.HandleFunc("POST /api/llm/profiles/{id}/duplicate", s.pgDuplicateProfile)
 	mux.HandleFunc("DELETE /api/llm/profiles/{id}", s.pgDeleteProfile)
 	mux.HandleFunc("POST /api/llm/profiles/active", s.pgActivateProfile)
 	mux.HandleFunc("GET /api/llm/retry-policy", s.pgGetLLMRetryPolicy)
@@ -3457,6 +3472,15 @@ func (s *Server) activityDetail(w http.ResponseWriter, r *http.Request) {
 // or in-flight transcripts.
 func taskActivityDetail(t *Task, seq int64) (string, error) {
 	return t.Store.ActivityDetailWithSources(seq)
+}
+
+func (s *Server) getTrafficStorage(w http.ResponseWriter, r *http.Request) {
+	tr := s.m.Traffic()
+	if tr == nil {
+		writeJSON(w, http.StatusOK, traffic.StorageStats{Stale: true, Error: "traffic storage unavailable"})
+		return
+	}
+	writeJSON(w, http.StatusOK, tr.StorageUsage())
 }
 
 func (s *Server) getTraffic(w http.ResponseWriter, r *http.Request) {
