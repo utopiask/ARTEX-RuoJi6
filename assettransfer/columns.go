@@ -75,7 +75,7 @@ var sheets = []sheetContract{
 		{"page_title", "页面标题", "page_title", "可选", false, false},
 		{"technologies", "技术", "technologies", "分号分隔；或 JSON 数组", false, false},
 		{"favicon_mmh3", "favicon_mmh3", "favicon_mmh3", "可选", false, false},
-		{"auth", "认证", "auth", `JSON 数组，如 [{"type":"basic","username":"u"}]`, false, true},
+		{"auth", "认证", "auth", `JSON 数组，键限 type/username/password/token/description/note/value/target，如 [{"type":"basic","username":"u"}]`, false, true},
 		{"note", "备注", "note", "可选", false, false},
 	}},
 	{"其他服务", "service", "other", []colDef{

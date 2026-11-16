@@ -112,6 +112,11 @@ type AuthEntry struct {
 	Password    string `json:"password,omitempty"`
 	Token       string `json:"token,omitempty"`
 	Description string `json:"description,omitempty"`
+	// Note/Value/Target 承接 agent 侦察写入的自由键（401 观察、硬编码凭证值、
+	// NTLM 挑战目标），保证导出回环不丢信息；全部字符串或缺省。
+	Note   string `json:"note,omitempty"`
+	Value  string `json:"value,omitempty"`
+	Target string `json:"target,omitempty"`
 }
 
 // ParamEntry mirrors db.ParamItem.

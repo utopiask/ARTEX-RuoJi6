@@ -314,10 +314,27 @@ func TestTemplateContractAndLists(t *testing.T) {
 	}
 }
 
+func TestAgentAuthKeysRoundTrip(t *testing.T) {
+	input := `{"format":"artex.assets","schema_version":1,"assets":[{"type":"service","url":"https://example.test","auth":[` +
+		`{"type":"auth_required","note":"全部路径 401"},` +
+		`{"type":"hardcoded_token","value":"TOKEN_SENTINEL"},` +
+		`{"type":"ntlm_challenge_target","target":"AMERICAS"}]}]}`
+	result, err := ParseJSON([]byte(input))
+	if err != nil || len(result.Errors) != 0 {
+		t.Fatalf("agent auth keys rejected: %v %+v", err, result)
+	}
+	r := result.Rows[0]
+	if len(r.Auth) != 3 || r.Auth[0].Note != "全部路径 401" || r.Auth[1].Value != "TOKEN_SENTINEL" || r.Auth[2].Target != "AMERICAS" {
+		t.Fatalf("agent auth keys lost in parse: %+v", r.Auth)
+	}
+}
+
 func TestStrictJSONNestedAndExactIntegers(t *testing.T) {
 	for _, asset := range []string{
 		`{"type":"service","url":"https://example.test","auth":[{"type":"basic","unknown":"secret"}]}`,
 		`{"type":"service","url":"https://example.test","auth":[{"password":false}]}`,
+		`{"type":"service","url":"https://example.test","auth":[{"note":false}]}`,
+		`{"type":"service","url":"https://example.test","auth":[{"target":[]}]}`,
 		`{"type":"endpoint","url":"https://example.test","method":"GET","params":[{"name":"id","value":0}]}`,
 		`{"type":"ip","ip":"203.0.113.1","open_ports":[{"port":443,"protocol":"udp"}]}`,
 		`{"type":"ip","ip":"203.0.113.1","open_ports":[{"port":443,"service":false}]}`,

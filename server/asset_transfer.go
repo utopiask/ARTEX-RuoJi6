@@ -592,6 +592,7 @@ func exportAssetFromDB(a *db.Asset) assettransfer.ExportAsset {
 		e.Auth = append(e.Auth, assettransfer.AuthEntry{
 			Type: strAny(m, "type"), Username: strAny(m, "username"), Password: strAny(m, "password"),
 			Token: strAny(m, "token"), Description: strAny(m, "description"),
+			Note: strAny(m, "note"), Value: strAny(m, "value"), Target: strAny(m, "target"),
 		})
 	}
 	for _, m := range a.Params {

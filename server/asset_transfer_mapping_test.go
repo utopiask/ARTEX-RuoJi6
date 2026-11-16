@@ -32,4 +32,17 @@ func TestAssetExportMappingRejectsSilentDrops(t *testing.T) {
 	if got := exportAssetFromDB(valid).ID; got != valid.ID {
 		t.Fatalf("source reference lost: %d", got)
 	}
+	// agent 自由键（401 观察 / 硬编码凭证值 / NTLM 挑战目标）属于合同内字段，敏感导出必须放行。
+	agentAuth := &db.Asset{ID: 8, Auth: []map[string]any{
+		{"type": "auth_required", "note": "全部路径 401"},
+		{"type": "hardcoded_token", "value": "synthetic"},
+		{"type": "ntlm_challenge_target", "target": "AMERICAS"},
+	}}
+	if err := validateAssetExportMapping(agentAuth, true); err != nil {
+		t.Fatal(err)
+	}
+	out := exportAssetFromDB(agentAuth)
+	if len(out.Auth) != 3 || out.Auth[0].Note != "全部路径 401" || out.Auth[1].Value != "synthetic" || out.Auth[2].Target != "AMERICAS" {
+		t.Fatalf("agent auth keys lost in export conversion: %+v", out.Auth)
+	}
 }

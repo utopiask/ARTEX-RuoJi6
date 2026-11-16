@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### 资产导入导出
+
+- **auth 迁移合同纳入 agent 自由键 `note` / `value` / `target`**：带敏感信息导出时，agent 侦察写入的 401 观察（`note`）、硬编码凭证值（`value`）、NTLM 挑战目标（`target`）此前会触发「含当前迁移合同不支持的字段，未导出」整资产拒导（线上真实数据 9 条命中）。现导出校验（`server/asset_transfer_mapping.go`）、导入解析（`jsonToAuth`）、导出转换与模板说明四处同步放行，三键仍限字符串，回环零丢失；未知键依旧拒导不改行为。回归：`assettransfer` 正向回环 + 拒损样本 ×2、`server` 导出映射放行与字段透传断言。
+
 ## [0.3.30] - 2026-11-14
 
 ### 新增与改进

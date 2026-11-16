@@ -465,7 +465,7 @@ func jsonToAuth(line int, v any) ([]AuthEntry, error) {
 		if !ok {
 			return nil, fmt.Errorf("资产[%d] auth 项必须是对象", line)
 		}
-		if err := validateObjectFields(m, map[string]bool{"type": false, "username": false, "password": false, "token": false, "description": false}); err != nil {
+		if err := validateObjectFields(m, map[string]bool{"type": false, "username": false, "password": false, "token": false, "description": false, "note": false, "value": false, "target": false}); err != nil {
 			return nil, err
 		}
 		e := AuthEntry{}
@@ -474,6 +474,9 @@ func jsonToAuth(line int, v any) ([]AuthEntry, error) {
 		e.Password, _ = m["password"].(string)
 		e.Token, _ = m["token"].(string)
 		e.Description, _ = m["description"].(string)
+		e.Note, _ = m["note"].(string)
+		e.Value, _ = m["value"].(string)
+		e.Target, _ = m["target"].(string)
 		out = append(out, e)
 	}
 	return out, nil

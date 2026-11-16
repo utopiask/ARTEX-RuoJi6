@@ -41,7 +41,7 @@ func validateAssetExportMapping(a *db.Asset, includeSensitive bool) error {
 		}
 	}
 	if includeSensitive {
-		if err := stringsOnly(a.Auth, map[string]bool{"type": true, "username": true, "password": true, "token": true, "description": true}, "auth"); err != nil {
+		if err := stringsOnly(a.Auth, map[string]bool{"type": true, "username": true, "password": true, "token": true, "description": true, "note": true, "value": true, "target": true}, "auth"); err != nil {
 			return err
 		}
 	}
