@@ -269,9 +269,9 @@ function taskControlAction(status: TaskStatus): "pause" | "resume" | null {
   return null;
 }
 
-type TaskSortField = "id" | "created" | "duration" | "status";
+type TaskSortField = "id" | "created" | "lastRun" | "duration" | "status";
 
-const TASK_SORT_FIELDS: readonly TaskSortField[] = ["id", "created", "duration", "status"];
+const TASK_SORT_FIELDS: readonly TaskSortField[] = ["id", "created", "lastRun", "duration", "status"];
 const TASK_SORT_PREFERENCE_KEY = "artex_task_list_sort";
 const TASK_FILTER_PREFERENCE_KEY = "artex_task_list_filters";
 const TASK_COLUMNS_PREFERENCE_KEY = "artex_task_list_columns";
@@ -286,6 +286,7 @@ type TaskColumnKey =
   | "findings"
   | "inFlight"
   | "created"
+  | "lastRun"
   | "duration"
   | "tokens";
 const TASK_COLUMNS: readonly { key: TaskColumnKey; label: string }[] = [
@@ -299,6 +300,7 @@ const TASK_COLUMNS: readonly { key: TaskColumnKey; label: string }[] = [
   ["findings", "taskUI.findings"],
   ["inFlight", "taskUI.workers"],
   ["created", "taskUI.createdAt"],
+  ["lastRun", "taskUI.lastRun"],
   ["duration", "taskUI.duration"],
   ["tokens", "Token"],
 ].map(([key, label]) => ({ key: key as TaskColumnKey, label }));
@@ -326,6 +328,13 @@ function taskCreatedUnix(task: Task): number {
   return Number.isNaN(parsed) ? 0 : Math.floor(parsed / 1000);
 }
 
+// 最后运行 = max(完成时刻, 最后活动时刻)。终态任务取 completed_at；运行/暂停任务取
+// 持久化的 activity 最后活动时间（暂停后引擎清掉内存值，API 回落到持久值）；从未
+// 运行的任务两者皆 0，降序时沉底。
+function taskLastRunUnix(task: Task): number {
+  return Math.max(task.completed_unix ?? 0, task.last_activity_unix ?? 0);
+}
+
 function compareTasks(left: Task, right: Task, field: TaskSortField, direction: SortDirection, nowSec: number): number {
   const leftPinned = taskIsPinned(left);
   const rightPinned = taskIsPinned(right);
@@ -338,6 +347,9 @@ function compareTasks(left: Task, right: Task, field: TaskSortField, direction: 
   switch (field) {
     case "created":
       compared = taskCreatedUnix(left) - taskCreatedUnix(right);
+      break;
+    case "lastRun":
+      compared = taskLastRunUnix(left) - taskLastRunUnix(right);
       break;
     case "duration":
       compared = taskDuration(left, nowSec) - taskDuration(right, nowSec);
@@ -1157,6 +1169,15 @@ export default function TasksPage() {
                       onSort={sortTasksBy}
                     />
                     <SortableTaskHead
+                      field="lastRun"
+                      label={translate("taskUI.lastRun")}
+                      hidden={!visibleColumns.lastRun}
+                      activeField={sortField}
+                      direction={sortDirection}
+                      align="right"
+                      onSort={sortTasksBy}
+                    />
+                    <SortableTaskHead
                       field="duration"
                       label={translate("taskUI.duration")}
                       hidden={!visibleColumns.duration}
@@ -1553,6 +1574,18 @@ const TaskRow = React.memo(function TaskRow({
         )}
       >
         {fmtDateTime(task.created_unix, i18n.resolvedLanguage ?? "zh-CN")}
+      </TableCell>
+      <TableCell
+        className={cn(
+          "text-muted-foreground text-right text-xs whitespace-nowrap tabular-nums",
+          !visibleColumns.lastRun && "hidden",
+        )}
+      >
+        {(() => {
+          const unix = taskLastRunUnix(task);
+          if (unix <= 0) return <span className="text-muted-foreground">—</span>;
+          return <span className={task.status === "running" ? "text-foreground" : undefined}>{fmtDateTime(unix, i18n.resolvedLanguage ?? "zh-CN")}</span>;
+        })()}
       </TableCell>
       <TableCell
         className={cn("text-right text-xs whitespace-nowrap tabular-nums", !visibleColumns.duration && "hidden")}

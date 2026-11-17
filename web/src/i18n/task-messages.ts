@@ -76,6 +76,7 @@ export const taskMessages = {
   "taskUI.findings": ["漏洞", "Findings"],
   "taskUI.workers": ["运行中 Worker", "Active Workers"],
   "taskUI.createdAt": ["创建时间", "Created"],
+  "taskUI.lastRun": ["最后运行", "Last Run"],
   "taskUI.duration": ["运行时长", "Run duration"],
   "taskUI.batchLimit": ["一次最多控制 100 个任务", "Control up to 100 tasks at a time"],
   "taskUI.categoryBatchLimit": ["一次最多修改 100 个任务的分类", "Move up to 100 tasks at a time"],
